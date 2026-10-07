@@ -13,8 +13,8 @@ const units = (value: string) => { const [whole, fraction = ""] = value.split(".
 export async function POST(request: Request) {
   const secret = process.env.USDT_WEBHOOK_SECRET;
   if (!secret || secret.length < 32) return apiError(ErrorCode.UPSTREAM_DISABLED, "USDT 链上确认适配器未启用，请在核实到账后由管理员手动确认", 501);
-  const timestamp = request.headers.get("x-aura-timestamp") || "";
-  const signature = request.headers.get("x-aura-signature") || "";
+  const timestamp = request.headers.get("x-haiou-timestamp") || "";
+  const signature = request.headers.get("x-haiou-signature") || "";
   if (!/^\d{10}$/.test(timestamp) || Math.abs(Date.now() / 1000 - Number(timestamp)) > 300 || !/^[a-f0-9]{64}$/i.test(signature)) return apiError(ErrorCode.AUTH_INVALID, "Invalid webhook credentials", 401);
   const raw = await request.text();
   if (raw.length > 8192) return apiError(ErrorCode.PAYLOAD_TOO_LARGE, "Payload too large", 413);

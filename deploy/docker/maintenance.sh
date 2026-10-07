@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # ============================================================================
-# aura 维护任务（Docker Compose 版）
+# haiou 维护任务（Docker Compose 版）
 #
 # 做三件事，缺一个都会在 silently 层面出问题：
 #   1. 订单过期清理      —— 不做则「待支付」列表越积越多，运营看不出真实在跑的量
 #   2. 充值任务推进      —— 不做则买家关掉页面任务永久卡住（timed_out 终态永不出现）
 #   3. 账号凭证 TTL 抹除 —— 不做则买家的登录态密文无限期留库（最高敏感级数据）
 #
-# 由 aura-docker-maintenance.timer 每 5 分钟触发，也可手工执行：
+# 由 haiou-docker-maintenance.timer 每 5 分钟触发，也可手工执行：
 #   bash deploy/docker/maintenance.sh
 #
 # 退出码：0 成功；1 失败（供 systemd / cron 判定是否告警）。
@@ -44,6 +44,6 @@ if ${COMPOSE_BASE} exec -T app node_modules/.bin/tsx scripts/maintenance.mjs; th
     log "维护任务完成"
 else
     code=$?
-    printf '[maintenance] 维护任务失败（退出码 %s），请查 journalctl -u aura-docker-maintenance\n' "${code}" >&2
+    printf '[maintenance] 维护任务失败（退出码 %s），请查 journalctl -u haiou-docker-maintenance\n' "${code}" >&2
     exit "${code}"
 fi

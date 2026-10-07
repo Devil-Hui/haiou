@@ -33,8 +33,8 @@ if [ -f "${ENV_FILE}" ]; then
     [ -n "${_db_user}" ] && DB_USER="${_db_user}"
     [ -n "${_db_name}" ] && DB_NAME="${_db_name}"
 fi
-DB_NAME="${DB_NAME:-aura}"
-DB_USER="${DB_USER:-aura}"
+DB_NAME="${DB_NAME:-haiou}"
+DB_USER="${DB_USER:-haiou}"
 TEMP_DB="${DB_NAME}_restore_check"
 COMPOSE_BASE="${COMPOSE:-docker compose -f docker-compose.yml -f deploy/docker-compose.nginx.yml}"
 
@@ -47,7 +47,7 @@ fi
 
 # ---- 选取最新备份 ------------------------------------------------------------
 # 用 find + sort 按修改时间排序，不解析 ls 输出（文件名格式可能被人为改动）。
-DUMP="$(find "${BACKUP_DIR}" -maxdepth 1 -name 'aura-*.dump' -printf '%T@ %p\n' 2>/dev/null \
+DUMP="$(find "${BACKUP_DIR}" -maxdepth 1 -name 'haiou-*.dump' -printf '%T@ %p\n' 2>/dev/null \
         | sort -rn | head -n1 | cut -d' ' -f2- || true)"
 
 [ -n "${DUMP}" ] || die "${BACKUP_DIR} 下没有任何备份文件（备份任务可能从未成功执行过）"
@@ -81,7 +81,7 @@ ${COMPOSE_BASE} exec -T db createdb -U "${DB_USER}" -T template0 "${TEMP_DB}"
 DB_CID="$(${COMPOSE_BASE} ps -q db 2>/dev/null || true)"
 [ -n "${DB_CID}" ] || die "拿不到 db 容器 ID，无法执行还原"
 
-RESTORE_FILE="/tmp/aura-restore-check-$$.dump"
+RESTORE_FILE="/tmp/haiou-restore-check-$$.dump"
 docker cp "${DUMP}" "${DB_CID}:${RESTORE_FILE}" >/dev/null 2>&1 \
     || die "无法把备份复制进 db 容器（备份文件：${DUMP}）"
 

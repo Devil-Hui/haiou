@@ -1,6 +1,6 @@
-# 每天清理一次 aura 应用日志（Docker Compose 版）
+# 每天清理一次 haiou 应用日志（Docker Compose 版）
 [Unit]
-Description=Daily aura application log pruning (Docker Compose)
+Description=Daily haiou application log pruning (Docker Compose)
 
 [Timer]
 # 04:30：与每日备份 03:30 错开，避免两个都扫盘的任务抢 IO。

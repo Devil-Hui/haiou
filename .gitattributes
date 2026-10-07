@@ -3,7 +3,7 @@
 #
 # 背景：本项目在 Windows（CRLF）上开发。部署目标是 Linux。
 # CRLF 到了Linux 上不是"格式不统一"这种 cosmetic 问题，而是真故障：
-#   · 带 \r 的 shebang → 内核按字面文件名找 "/entrypoint-aura.sh\r"，
+#   · 带 \r 的 shebang → 内核按字面文件名找 "/entrypoint-haiou.sh\r"，
 #     直接 exec 失败（实测 exit 255 / no such file or directory），容器起不来
 #   · systemd unit 文件带 \r → "Failed to parse" 或忽略该unit
 #   · Nginx 配置带 \r → nginx -t 可能侥幸通过，但正则与日志被污染（隐性故障）

@@ -1,7 +1,7 @@
 # ============================================================================
-# aura 站点配置（envsubst 模板）
+# haiou 站点配置（envsubst 模板）
 #
-# 部署时会被渲染到容器内 /etc/nginx/conf.d/aura.conf。
+# 部署时会被渲染到容器内 /etc/nginx/conf.d/haiou.conf。
 # 所有 ${VAR} 由 .env 提供，未设置时走|| 后面的默认值——
 # 这样即使忘填也能起得来（降级但可用），而不是启动失败。
 #
@@ -15,7 +15,7 @@
 # ============================================================================
 
 # ---- 上游：Node 应用 ---------------------------------------------------------
-upstream aura_app {
+upstream haiou_app {
     # Compose 服务名：由 Docker 内置 DNS（127.0.0.11）解析到 app 容器 IP。
     # 不用 127.0.0.1：容器内 127.0.0.1 是 Nginx 容器自己，不是应用。
     server app:3000 max_fails=3 fail_timeout=10s;
@@ -59,13 +59,13 @@ server {
 server {
     listen      80;
     listen      [::]:80;
-    server_name ${AURA_DOMAIN};
+    server_name ${HAIOU_DOMAIN};
 
     # Cloudflare「始终使用 HTTPS」开启后，请求根本到不了这里；
     # 但直连源站（攻击者或调试）仍可能打 80，所以该跳还是要跳。
     #
     # $host 来自请求的 Host 头。open_redirect 风险已由 .env 里的域名白名单消除：
-    # server_name 固定为AURA_DOMAIN，未匹配的 Host 会落到下面的 default 拒服 server。
+    # server_name 固定为HAIOU_DOMAIN，未匹配的 Host 会落到下面的 default 拒服 server。
     return 301 https://$host$request_uri;
 
     # ACME 证书签发/续期用。Cloudflare Origin CA 不需要这行（免签，15 年有效），
@@ -82,7 +82,7 @@ server {
     listen      443 ssl;
     listen      [::]:443 ssl;
     http2       on;
-    server_name ${AURA_DOMAIN};
+    server_name ${HAIOU_DOMAIN};
 
     # ---- 证书 -------------------------------------------------------------
     # Cloudflare Origin CA（推荐）：15 年有效期、免续期、强度更高。
@@ -105,7 +105,7 @@ server {
 
     # 会话复用：5m 共享内存约可缓存 20000 条会话。
     # 2C2G 上这是"让握手变便宜"的关键——复用省掉一次完整握手（含非对称运算）。
-    ssl_session_cache    shared:AuraSSL:5m;
+    ssl_session_cache    shared:HaiouSSL:5m;
     ssl_session_timeout  1d;
     # 关闭会话票据：票据是**自包含**的（Nginx 不查共享内存也能恢复会话），
     # 无法集中吊销。前向保密下票据带来的收益有限，关闭更可控。
@@ -134,15 +134,15 @@ server {
     # 而企业网/校园网/移动 NAT/Cloudflare 出口会让大量用户共用同一源 IP，
     # 第 33 个请求即被拒 —— 表现为"部分人能访问、部分人不能"，极难定位。
     # 注意：真实 IP 已由 realip 还原，所以这里按访客算，不会被 CF 节点串桶。
-    limit_conn             aura_conn 200;
+    limit_conn             haiou_conn 200;
 
     # 限流命中转交 @too_many_requests 处理（该 location 定义在本 server 内）。
     # "=" 带等号表示**内部重定向**：保留原请求方法与状态码语义，
     # 不把 429 变成 302。
     error_page 429 = @too_many_requests;
 
-    access_log             /var/log/nginx/aura.access.log  main;
-    error_log              /var/log/nginx/aura.error.log   warn;
+    access_log             /var/log/nginx/haiou.access.log  main;
+    error_log              /var/log/nginx/haiou.error.log   warn;
 
     # ---- 安全响应头 ---------------------------------------------------------
     # 关键：Nginx 的 add_header 是"就近覆盖"而非"合并"——
@@ -150,7 +150,7 @@ server {
     # 本文件有多个 location 自带add_header（静态/API/orders/admin），
     # 所以安全头不能只写在 server 层（那样这些 location 会一个都拿不到），
     # 必须由各 location 显式 include 下面的片段。
-    include /etc/nginx/conf.d/aura-security-headers.conf;
+    include /etc/nginx/conf.d/haiou-security-headers.conf;
 
     server_tokens  off;
 
@@ -158,7 +158,7 @@ server {
     # 静态资源不打（见下），因为正常页面会并发拉几十个静态文件，
     # 按 20r/s 限会误伤首屏。
     location / {
-        limit_req zone=aura_req burst=40 nodelay;
+        limit_req zone=haiou_req burst=40 nodelay;
 
         # public/ 直出，找不到就回源给 Node。
         # Dockerfile 已拷贝 public/ 到镜像，这里静态命中省掉 Node 的一次请求。
@@ -174,7 +174,7 @@ server {
         access_log     off;              #量大且无排障价值，关掉可省磁盘 IO
         expires        1y;
         # 与本location 自己的 Cache-Control 并列（add_header 不合并，故需显式 include 安全头）
-        include /etc/nginx/conf.d/aura-security-headers.conf;
+        include /etc/nginx/conf.d/haiou-security-headers.conf;
         add_header Cache-Control "public, max-age=31536000, immutable" always;
 
         # 元数据缓存：把 stat() 结果（大小/权限/mtime）缓存在内存，
@@ -189,7 +189,7 @@ server {
     # HMR 热更新：生产不跑 next dev，但保留这段会让本地排障更顺。
     # WebSocket 升级（下面 map 的用途）在这里第一次真正派上用场。
     location ^~ /_next/webpack-hmr {
-        proxy_pass http://aura_app;
+        proxy_pass http://haiou_app;
         proxy_http_version 1.1;
         proxy_set_header Upgrade    $http_upgrade;
         proxy_set_header Connection $connection_upgrade;
@@ -206,9 +206,9 @@ server {
     # 只缓存这两个**完全公开、不读 Cookie** 的页面。
     # 它们不调用 cookies()，命中缓存不会串号。
     location ~ ^/(legal)?$ {
-        limit_req zone=aura_req burst=40 nodelay;
+        limit_req zone=haiou_req burst=40 nodelay;
 
-        proxy_cache             aura_html;
+        proxy_cache             haiou_html;
         proxy_cache_key         "$scheme$host$request_uri";
         proxy_cache_valid       200 5s;
         proxy_cache_lock        on;   # 缓存失效瞬间只放一个请求回源，
@@ -221,7 +221,7 @@ server {
         # 将来若把任何个性化页面放进这个 location，必须先删掉它。
         proxy_ignore_headers    Cache-Control Expires Set-Cookie;
 
-        proxy_pass              http://aura_app;
+        proxy_pass              http://haiou_app;
         proxy_http_version      1.1;
         proxy_set_header        Connection "";
         proxy_set_header        Host              $host;
@@ -239,7 +239,7 @@ server {
     # 匹配所有 /api/ 前缀。显式关闭缓存并加 no-store，
     # 防止 Cloudflare 或浏览器缓存了含用户数据的响应。
     location ^~ /api/ {
-        proxy_pass             http://aura_app;
+        proxy_pass             http://haiou_app;
         proxy_http_version     1.1;
         proxy_set_header       Connection "";
 
@@ -268,13 +268,13 @@ server {
         # 保证客户端断开时上游也停，别让 Node 白跑
         proxy_ignore_client_abort off;
 
-        include /etc/nginx/conf.d/aura-security-headers.conf;
+        include /etc/nginx/conf.d/haiou-security-headers.conf;
         add_header Cache-Control "no-store, no-cache, must-revalidate" always;
     }
 
     # ---- 订单页：绝不缓存 + Referrer 收敛 ----------------------------------
     location ^~ /orders/ {
-        proxy_pass             http://aura_app;
+        proxy_pass             http://haiou_app;
         proxy_http_version     1.1;
         proxy_set_header       Connection "";
         proxy_set_header       Host              $host;
@@ -286,7 +286,7 @@ server {
         proxy_read_timeout     30s;
 
         # 订单页含订单号等敏感信息，Referer 不外泄（比全局更严）
-        include /etc/nginx/conf.d/aura-security-headers.conf;
+        include /etc/nginx/conf.d/haiou-security-headers.conf;
         add_header Referrer-Policy "no-referrer" always;
         add_header Cache-Control "no-store" always;
     }
@@ -295,9 +295,9 @@ server {
     location ^~ /admin {
         # 后台是登录爆破的首要目标，限流收紧到 2r/s、突发 10。
         # 正常用户操作后台不会触发这个频率。
-        limit_req  zone=aura_req burst=10 nodelay;
+        limit_req  zone=haiou_req burst=10 nodelay;
 
-        proxy_pass             http://aura_app;
+        proxy_pass             http://haiou_app;
         proxy_http_version     1.1;
         proxy_set_header       Connection "";
         proxy_set_header       Host              $host;
@@ -308,16 +308,16 @@ server {
         proxy_connect_timeout  5s;
         proxy_read_timeout     60s;   # 后台报表可能慢
 
-        include /etc/nginx/conf.d/aura-security-headers.conf;
+        include /etc/nginx/conf.d/haiou-security-headers.conf;
         add_header X-Robots-Tag "noindex, nofollow" always;
         add_header Referrer-Policy "no-referrer" always;
     }
 
     # ---- 兜底：回源给 Node（try_files 未命中时进入）-------------------------
     location @app {
-        limit_req  zone=aura_req burst=40 nodelay;
+        limit_req  zone=haiou_req burst=40 nodelay;
 
-        proxy_pass             http://aura_app;
+        proxy_pass             http://haiou_app;
         proxy_http_version     1.1;
         proxy_set_header       Connection "";
 
@@ -350,7 +350,7 @@ server {
         default_type             application/json;
         # 该 location 自带 add_header，不会继承 server 层的，
         # 所以显式 include 安全头片段（add_header 不合并）。
-        include /etc/nginx/conf.d/aura-security-headers.conf;
+        include /etc/nginx/conf.d/haiou-security-headers.conf;
         return 429 '{"error":"请求过于频繁，请稍后重试","retryAfter":1}';
     }
 

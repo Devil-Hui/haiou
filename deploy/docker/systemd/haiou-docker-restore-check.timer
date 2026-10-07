@@ -1,6 +1,6 @@
-# 每月 aura 备份恢复演练（Docker Compose 版）
+# 每月 haiou 备份恢复演练（Docker Compose 版）
 [Unit]
-Description=Monthly aura backup restore drill (Docker Compose)
+Description=Monthly haiou backup restore drill (Docker Compose)
 
 [Timer]
 # 每月 1 日 04:30。选1 日是因为它跑在"新一个月第一份每日备份"之后，

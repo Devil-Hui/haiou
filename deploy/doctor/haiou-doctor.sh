@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================================
-# aura-doctor.sh — 全量体检中央入口（展开式分步反馈）
+# haiou-doctor.sh — 全量体检中央入口（展开式分步反馈）
 #
 # 把 deploy/doctor/checks/ 下的子检查串起来跑，并按「已具备/未执行/未配置」
 # 三态收拢：
@@ -9,11 +9,11 @@
 #   这样既有总览，又能在弯腰处直接看到修复路径。
 #
 # 主要能力：
-#   aura-doctor.sh                    全部检查（按顺序）
-#   aura-doctor.sh --only=connect      只跑指定子检查（db|admin|connect|ports|cloudflare）或 step
-#   aura-doctor.sh --gate-set          设置/重置安全门密码
-#   aura-doctor.sh --reset-state       清空已收集状态（重新跑时全部按现场判定）
-#   aura-doctor.sh --no-gate=1         CI/自动化：跳过安全门（不推荐）
+#   haiou-doctor.sh                    全部检查（按顺序）
+#   haiou-doctor.sh --only=connect      只跑指定子检查（db|admin|connect|ports|cloudflare）或 step
+#   haiou-doctor.sh --gate-set          设置/重置安全门密码
+#   haiou-doctor.sh --reset-state       清空已收集状态（重新跑时全部按现场判定）
+#   haiou-doctor.sh --no-gate=1         CI/自动化：跳过安全门（不推荐）
 #
 # 统一出口：所有子检查把结论写进 STATE_FILE（data/doctor/steps.state），
 # 本脚本读它做收敛展示。也可分别直接跑子脚本，结论同样落盘。
@@ -73,7 +73,7 @@ fi
 
 echo
 printf '%s=================================================%s\n' "${C_BOLD}" "${C_RST}"
-printf '%s  aura 体检报告（先 preflight 后逐项）%s\n' "${C_BOLD}" "${C_RST}"
+printf '%s  haiou 体检报告（先 preflight 后逐项）%s\n' "${C_BOLD}" "${C_RST}"
 printf '%s=================================================%s\n' "${C_BOLD}" "${C_RST}"
 
 # ---- 顺序执行子检查（每个都追加写 state，结论收拢）---------------------------
@@ -126,4 +126,4 @@ else
 fi
 echo
 doc_log "所有检查完成。对任何「待执行/未配置」项，上方已展开并给出一条或多条修复命令。"
-doc_log "单独再查某个子类：bash deploy/doctor/aura-doctor.sh --only=db|admin|connect|ports|cloudflare"
+doc_log "单独再查某个子类：bash deploy/doctor/haiou-doctor.sh --only=db|admin|connect|ports|cloudflare"

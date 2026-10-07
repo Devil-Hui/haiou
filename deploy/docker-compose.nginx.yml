@@ -18,7 +18,7 @@
 #      → 命令更短，但会打破"app 只对本机可见"的安全默认
 # 采用 A：部署形态的选择权留给运维，不强制切换。
 # ============================================================================
-name: aura
+name: haiou
 
 services:
   nginx:
@@ -62,7 +62,7 @@ services:
     # 不写 network_mode: host——那会让容器共享宿主网络栈，
     # 既隔离又让容器内"127.0.0.1:3000"歧义（指宿主而非app 容器）。
     networks:
-      - aura_net
+      - haiou_net
 
     depends_on:
       app:
@@ -70,13 +70,13 @@ services:
 
     # ---- 环境变量（模板占位符来源）---------------------------------------------
     environment:
-      AURA_DOMAIN: ${AURA_DOMAIN:?请在 .env 中设置 AURA_DOMAIN（如aura.example.com）}
+      HAIOU_DOMAIN: ${HAIOU_DOMAIN:?请在 .env 中设置 HAIOU_DOMAIN（如haiou.example.com）}
 
       # 证书路径（容器内）。用 Cloudflare Origin CA：
-      #   docker cp origin-ca.pem aura-nginx-1:/etc/nginx/certs/aura.crt
-      #   docker cp origin-ca.key aura-nginx-1:/etc/nginx/certs/aura.key
-      NGINX_SSL_CERT: ${NGINX_SSL_CERT:-/etc/nginx/certs/aura.crt}
-      NGINX_SSL_KEY: ${NGINX_SSL_KEY:-/etc/nginx/certs/aura.key}
+      #   docker cp origin-ca.pem haiou-nginx-1:/etc/nginx/certs/haiou.crt
+      #   docker cp origin-ca.key haiou-nginx-1:/etc/nginx/certs/haiou.key
+      NGINX_SSL_CERT: ${NGINX_SSL_CERT:-/etc/nginx/certs/haiou.crt}
+      NGINX_SSL_KEY: ${NGINX_SSL_KEY:-/etc/nginx/certs/haiou.key}
       # OCSP stapling 的信任链证书。用 Origin CA 时留空（该 CA 无公共 OCSP）。
       NGINX_SSL_TRUSTED_CERT: ${NGINX_SSL_TRUSTED_CERT:-}
 
@@ -141,7 +141,7 @@ services:
     # ---- 日志轮转 -----------------------------------------------------------
     # Docker 默认 json-file **不轮转**，小磁盘机器会被日志悄悄写满（主 compose
     # 的 db/app 已配，这里保持一致）。
-    # 与宿主机 logrotate-aura.conf 的区别：那管的是宿主机 /var/log/nginx，
+    # 与宿主机 logrotate-haiou.conf 的区别：那管的是宿主机 /var/log/nginx，
     # 这里管容器 stdout/stderr，两者不冲突。
     logging:
       driver: json-file
@@ -165,5 +165,5 @@ services:
 # 不用默认 bridge：自定义网络自带 DNS 服务解析（容器名可直接当主机名），
 # 且能与 db 子网隔离。db 只在内部网络可达，不暴露到边缘层。
 networks:
-  aura_net:
+  haiou_net:
     driver: bridge

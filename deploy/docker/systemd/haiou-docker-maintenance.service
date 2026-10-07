@@ -1,4 +1,4 @@
-# aura 维护任务（Docker Compose 版）
+# haiou 维护任务（Docker Compose 版）
 #
 # 每 5 分钟跑一次 scripts/maintenance.mjs：订单过期清理、充值任务推进、凭证 TTL 抹除。
 # 不做这三件事，订单会永不过期、充值任务永久卡住、买家账号凭证无限期留库。
@@ -8,8 +8,8 @@
 #    你会以为任务在跑，其实一次都没跑过。
 #    本文件由 deploy/docker/fix-crlf.sh --install 自动安装并做 LF 化。
 [Unit]
-Description=aura maintenance: expiry sweep, recharge advance, credential purge (Docker Compose)
-Documentation=file:///opt/aura/docs/项目交接文档.md
+Description=haiou maintenance: expiry sweep, recharge advance, credential purge (Docker Compose)
+Documentation=file:///opt/haiou/docs/项目交接文档.md
 # 要连数据库并访问上游，必须等网络与 docker 就绪。
 After=docker.service network-online.target
 Wants=network-online.target
@@ -17,8 +17,8 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 # 路径按实际部署位置调整；fix-crlf.sh --install 会替换为实际 APP_ROOT
-ExecStart=/opt/aura/deploy/docker/maintenance.sh
-WorkingDirectory=/opt/aura
+ExecStart=/opt/haiou/deploy/docker/maintenance.sh
+WorkingDirectory=/opt/haiou
 
 # 兜底：单个任务卡住不能让整条链路停摆。上游 HTTP 调用在 adapter 里有超时，
 # 这里再加一层硬上限。5 分钟间隔配 4 分钟上限，避免上一轮没跑完时叠加。

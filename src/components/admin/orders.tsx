@@ -20,7 +20,7 @@ export default function OrderManagement({ initialQuery = "", initialStatus = "" 
     const rows = [["订单号", "账号邮箱", "套餐", "金额(CNY)", "支付方式", "状态", "创建时间"], ...data.items.map(order => [order.code, order.email, order.planName, order.amount, paymentLabel(order.paymentMethod), statusLabels[order.status], formatDate(order.createdAt)])];
     const escape = (text: string) => `"${(/^[=+@-]/.test(text) ? `'${text}` : text).replace(/"/g, '""')}"`;
     const blob = new Blob(["\uFEFF" + rows.map(row => row.map(escape).join(",")).join("\r\n")], { type: "text/csv;charset=utf-8;" });
-    const href = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = href; link.download = `aura-orders-page-${page}.csv`; link.click(); URL.revokeObjectURL(href); setToast("本页订单已导出，请妥善保管账号数据");
+    const href = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = href; link.download = `haiou-orders-page-${page}.csv`; link.click(); URL.revokeObjectURL(href); setToast("本页订单已导出，请妥善保管账号数据");
   }
 
   // 行内「发放卡密 / 补发卡密」。

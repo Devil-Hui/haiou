@@ -49,17 +49,17 @@ fi
 
 echo
 printf '%s== [C] 域名指向与 SITE_URL ==%s\n' "${C_BOLD}" "${C_RST}"
-DOMAIN="$(env_get AURA_DOMAIN || echo '')"
+DOMAIN="$(env_get HAIOU_DOMAIN || echo '')"
 SITE="$(env_get SITE_URL || echo '')"
 _placeholder() { [ -z "$1" ] || echo "$1" | grep -qE '请改成|example|localhost|^https?://$'; }
 
 if _placeholder "${DOMAIN}"; then
-    printf '  %s AURA_DOMAIN 未配置/占位（nginx server_name 会落 default）\n' "$(tag_missing)"
-    announce cf-domain missing "AURA_DOMAIN 未真正配置" \
-        "在 ${ENV_FILE} 设 AURA_DOMAIN=你的域名 后重启 nginx/app"
+    printf '  %s HAIOU_DOMAIN 未配置/占位（nginx server_name 会落 default）\n' "$(tag_missing)"
+    announce cf-domain missing "HAIOU_DOMAIN 未真正配置" \
+        "在 ${ENV_FILE} 设 HAIOU_DOMAIN=你的域名 后重启 nginx/app"
 else
-    printf '  %s AURA_DOMAIN=%s\n' "$(tag_done)" "${DOMAIN}"
-    announce cf-domain done "AURA_DOMAIN 已配置"
+    printf '  %s HAIOU_DOMAIN=%s\n' "$(tag_done)" "${DOMAIN}"
+    announce cf-domain done "HAIOU_DOMAIN 已配置"
 fi
 
 if _placeholder "${SITE}"; then

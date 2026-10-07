@@ -51,7 +51,7 @@ render_main_conf() {
 # ---- 2. 渲染 conf.d 站点配置 ------------------------------------------------
 # 白名单列举所有站点配置里用到的变量。
 #
-# 漏一个的后果是该变量变成空字符串。例如漏掉 AURA_DOMAIN，
+# 漏一个的后果是该变量变成空字符串。例如漏掉 HAIOU_DOMAIN，
 # server_name 会变成空 → 所有请求都落到 default_server → 全站444拒服。
 render_site_confs() {
     [ -d "${TEMPLATE_DIR}/conf.d" ] || return 0
@@ -59,11 +59,11 @@ render_site_confs() {
     mkdir -p "${CONF_D}"
 
     # 兜底值。必须在 envsubst 之前 export（原因同 render_main_conf 里的说明）。
-    # AURA_DOMAIN 为空是最危险的失效模式：server_name 变空后所有请求都落到
+    # HAIOU_DOMAIN 为空是最危险的失效模式：server_name 变空后所有请求都落到
     # default_server → 全站 444 拒服，而日志里看不出原因。
-    export AURA_DOMAIN="${AURA_DOMAIN:-aura.example.com}"
-    export NGINX_SSL_CERT="${NGINX_SSL_CERT:-/etc/nginx/certs/aura.crt}"
-    export NGINX_SSL_KEY="${NGINX_SSL_KEY:-/etc/nginx/certs/aura.key}"
+    export HAIOU_DOMAIN="${HAIOU_DOMAIN:-haiou.example.com}"
+    export NGINX_SSL_CERT="${NGINX_SSL_CERT:-/etc/nginx/certs/haiou.crt}"
+    export NGINX_SSL_KEY="${NGINX_SSL_KEY:-/etc/nginx/certs/haiou.key}"
     export NGINX_SSL_TRUSTED_CERT="${NGINX_SSL_TRUSTED_CERT:-}"
     export NGINX_MAX_BODY_SIZE="${NGINX_MAX_BODY_SIZE:-256k}"
     export NGINX_CF_GUARD_PORT="${NGINX_CF_GUARD_PORT:-8443}"
@@ -90,7 +90,7 @@ render_site_confs() {
     for tpl in "${TEMPLATE_DIR}"/conf.d/*.template; do
         [ -e "${tpl}" ] || continue
         out="${CONF_D}/$(basename "${tpl}" .template)"
-        envsubst '${AURA_DOMAIN} ${NGINX_SSL_CERT} ${NGINX_SSL_KEY} ${NGINX_SSL_TRUSTED_CERT} ${NGINX_OCSP_BLOCK} ${NGINX_MAX_BODY_SIZE} ${NGINX_CF_GUARD_PORT}' \
+        envsubst '${HAIOU_DOMAIN} ${NGINX_SSL_CERT} ${NGINX_SSL_KEY} ${NGINX_SSL_TRUSTED_CERT} ${NGINX_OCSP_BLOCK} ${NGINX_MAX_BODY_SIZE} ${NGINX_CF_GUARD_PORT}' \
             < "${tpl}" > "${out}"
         echo "[entrypoint]  $(basename "${out}")"
     done
@@ -114,8 +114,8 @@ done
 # ---- 4. 证书存在性检查（fail-fast）-------------------------------------------
 # 缺证书时 Nginx 会启动失败并刷一屏看不懂的日志。这里提前给人话提示。
 # 判断用「存在且非空」——空文件同样导致握手失败。
-CERT="${NGINX_SSL_CERT:-/etc/nginx/certs/aura.crt}"
-KEY="${NGINX_SSL_KEY:-/etc/nginx/certs/aura.key}"
+CERT="${NGINX_SSL_CERT:-/etc/nginx/certs/haiou.crt}"
+KEY="${NGINX_SSL_KEY:-/etc/nginx/certs/haiou.key}"
 
 if [ ! -s "${CERT}" ] || [ ! -s "${KEY}" ]; then
     cat >&2 <<EOF
@@ -133,8 +133,8 @@ if [ ! -s "${CERT}" ] || [ ! -s "${KEY}" ]; then
 
 只想本机调试不想配证书？可在 .env 里注释掉 443 相关的 server 块，
 或临时用自签证书：openssl req -x509 -newkey rsa:2048 -nodes -days 365 \\
-  -keyout data/nginx/certs/aura.key -out data/nginx/certs/aura.crt \\
-  -subj '/CN=aura.example.com'
+  -keyout data/nginx/certs/haiou.key -out data/nginx/certs/haiou.crt \\
+  -subj '/CN=haiou.example.com'
 ════════════════════════════════════════════════════════════════════
 
 EOF

@@ -27,7 +27,7 @@ COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 # 构建期 Next 会加载页面模块，数据库模块要求连接串可解析，这里给一个占位值。
 # 真正的地址在运行时由 compose 通过 environment 注入，不写进镜像。
-ARG DATABASE_URL=postgresql://aura:aura@db:5432/aura
+ARG DATABASE_URL=postgresql://haiou:haiou@db:5432/haiou
 ENV DATABASE_URL=$DATABASE_URL
 # .next/cache 是编译缓存（ISR / fetch 缓存），本站全部动态渲染、请求一律 no-store，
 # 运行时用不到；留着只会让镜像白胖 63 MB。

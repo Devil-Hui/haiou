@@ -1,6 +1,6 @@
-# 每 5 分钟执行一次 aura 维护任务（Docker Compose 版）
+# 每 5 分钟执行一次 haiou 维护任务（Docker Compose 版）
 [Unit]
-Description=Run aura maintenance every 5 minutes (Docker Compose)
+Description=Run haiou maintenance every 5 minutes (Docker Compose)
 
 [Timer]
 # 为什么是 5 分钟：
@@ -11,7 +11,7 @@ Description=Run aura maintenance every 5 minutes (Docker Compose)
 # 再密就是对 2C2G 白耗 CPU，再疏则买家可见地卡住。
 OnBootSec=2min
 OnUnitActiveSec=5min
-Unit=aura-docker-maintenance.service
+Unit=haiou-docker-maintenance.service
 
 # 不用 Persistent=true：这是"推进型"任务而非"补跑型"。
 # 停机期间订单本来就该超时、任务本来就该卡住，开机后下一次 5 分钟自然会处理；

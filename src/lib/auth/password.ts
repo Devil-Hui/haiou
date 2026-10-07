@@ -84,7 +84,7 @@ const COMMON_PASSWORDS = new Set([
   "password", "password1", "password123", "password1234",
   "1234567890", "12345678901", "123456789012", "1234567890123",
   "qwertyuiop", "qwerty12345", "administrator", "admin12345",
-  "letmein1234", "iloveyou123", "welcome12345", "aura1234567",
+  "letmein1234", "iloveyou123", "welcome12345", "haiou1234567",
 ]);
 
 // Privileged-account creation policy, NIST 800-63B style: length over composition rules.

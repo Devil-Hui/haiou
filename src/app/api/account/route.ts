@@ -11,13 +11,13 @@ import { apiError, ErrorCode, ok, readJson } from "@/lib/core";
 // 普通用户账号：注册 / 登录 / 登出 / 当前会话。与管理员会话完全独立（独立 Cookie、独立表）。
 // 下单与查单仍支持免注册邮箱方式，注册是可选项。
 
-const COOKIE = "aura_user";
+const COOKIE = "haiou_user";
 const TTL_MS = 30 * 24 * 3600 * 1000;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const digest = (token: string) => createHash("sha256").update(token).digest("hex");
 const cookieOptions = (expires: Date) => ({ httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax" as const, path: "/", expires });
 // 邮箱不存在时也消耗一次 scrypt，使响应耗时与命中真实账号时一致，杜绝账号枚举。
-const TIMING_EQUALIZER = hashPassword("aura-user-credential-equalizer");
+const TIMING_EQUALIZER = hashPassword("haiou-user-credential-equalizer");
 
 async function startSession(id: string) {
   const token = randomBytes(32).toString("hex");

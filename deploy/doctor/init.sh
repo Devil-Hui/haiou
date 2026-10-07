@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================================
-# aura 首启向导（init）
+# haiou 首启向导（init）
 #
 # 面向拿到一台新服务器后的一站式进场脚本。遵循「最小权限 + 幂等 + 分步确认」：
 #   · 未配安全门先配安全门（第一步，也是你最先要做的两件事之一）；
@@ -14,7 +14,7 @@
 #   -a/--admin       : 指定管理员用户名（否则交互提问）
 #
 # 幂等：重复执行只补齐缺失步骤，不会破坏已就绪项；每一步都会写状态。
-# 与 `aura-doctor.sh` 共用同一份 state，跑完后可用它体检。
+# 与 `haiou-doctor.sh` 共用同一份 state，跑完后可用它体检。
 # ============================================================================
 set -euo pipefail
 
@@ -47,7 +47,7 @@ else
     if gate_init; then
         announce sg-gate done "安全门已启用"
     else
-        doc_warn "安全门未就绪，但继续进场（建议马上补：bash ${DOCTOR_DIR}/aura-doctor.sh --gate-set）"
+        doc_warn "安全门未就绪，但继续进场（建议马上补：bash ${DOCTOR_DIR}/haiou-doctor.sh --gate-set）"
         announce sg-gate skip "安全门跳过（进场继续）"
     fi
 fi
@@ -84,7 +84,7 @@ if [ "${NEED_PW}" -eq 1 ]; then
     fi
     doc_log "已生成强随机数据库密码（24 hex 位）并写入 .env，权限 600"
     doc_log "建议将它另存到离线处（本脚本不回显密码，也不写入任何日志）："
-    doc_log "    例如新建 ~/.aura-keys 存档信息，并 chmod 600。"
+    doc_log "    例如新建 ~/.haiou-keys 存档信息，并 chmod 600。"
     announce db-password done "数据库密码已生成"
 else
     announce db-password done "数据库密码已存在且非占位"
@@ -146,7 +146,7 @@ fi
 doc_log "启动数据库……"
 "${COMPOSE[@]}" up -d db
 for i in $(seq 1 60); do
-    if "${COMPOSE[@]}" exec -T db pg_isready -U "$(env_get POSTGRES_USER || echo aura)" -d "$(env_get POSTGRES_DB || echo aura)" >/dev/null 2>&1; then
+    if "${COMPOSE[@]}" exec -T db pg_isready -U "$(env_get POSTGRES_USER || echo haiou)" -d "$(env_get POSTGRES_DB || echo haiou)" >/dev/null 2>&1; then
         announce db-running done "数据库已就绪（pg_isready 通过）"; break
     fi
     [ "$i" = 60 ] && { announce db-running missing "数据库 60s 未就绪，查看日志：${COMPOSE[*]} logs db"; exit 1; }
@@ -184,7 +184,7 @@ else
     doc_warn "未发现管理员。请在 app 容器内创建（交互、密码不回显）："
     doc_log "    ${COMPOSE[*]} exec -it app node_modules/.bin/tsx scripts/create-admin.mjs"
     doc_log "    或：npm run admin:create"
-    doc_log "创建完成后请重跑 aura-doctor 验证。"
+    doc_log "创建完成后请重跑 haiou-doctor 验证。"
     announce admin-created wait "管理员待创建（见上方引导）" "docker compose -f docker-compose.yml -f deploy/docker-compose.nginx.yml exec -it app node_modules/.bin/tsx scripts/create-admin.mjs"
 fi
 
@@ -201,6 +201,6 @@ curl -fsS "http://127.0.0.1:3000/api/auth" >/dev/null 2>&1 \
 
 echo
 doc_log "进场脚本完成。下一步："
-printf '  1. bash deploy/doctor/aura-doctor.sh       # 全量体检（展开式逐步反馈）\n'
+printf '  1. bash deploy/doctor/haiou-doctor.sh       # 全量体检（展开式逐步反馈）\n'
 printf '  2. bash deploy/docker/fix-crlf.sh --install # (若用 systemd) 装定时任务\n'
 printf '  3. 配置安全门后即可用 status / tail-errors 查看状态\n'

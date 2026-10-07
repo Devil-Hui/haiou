@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================================
-# aura 数据库备份（Docker Compose 版）
+# haiou 数据库备份（Docker Compose 版）
 #
 # Docker 部署下宿主机**没有** PG 可执行文件，必须进容器操作 pg_dump。
 #
@@ -25,7 +25,7 @@ KEEP_DAYS="${KEEP_DAYS:-14}"
 # ---- 与 docker compose 读同一份 .env（若存在）--------------------------------
 # docker compose 会自动加载项目根目录的 .env 来解析 ${POSTGRES_*}，但**宿主机上的
 # 这个 shell 不会**。若运营在 .env 里把 POSTGRES_USER 改成了非默认值，而这里仍按
-# 默认 aura 去 pg_dump，备份会在「USER 名对不上」时失败——或更糟：一旦 docker 镜像
+# 默认 haiou 去 pg_dump，备份会在「USER 名对不上」时失败——或更糟：一旦 docker 镜像
 # 里恰好存在同名的简化认证，会备份到**错误的一个角色**。
 # 这里只取 PG 相关键（不 export 密码，避免被子进程/日志带出去），与 compose 的
 # 取值口径保持一致。注意：--env-file 的变量本身仍不会被 export，加减号需谨慎。
@@ -40,8 +40,8 @@ if [ -f "${ENV_FILE}" ]; then
     [ -n "${_db_user}" ] && DB_USER="${_db_user}"
     [ -n "${_db_name}" ] && DB_NAME="${_db_name}"
 fi
-DB_NAME="${DB_NAME:-aura}"
-DB_USER="${DB_USER:-aura}"
+DB_NAME="${DB_NAME:-haiou}"
+DB_USER="${DB_USER:-haiou}"
 
 # compose 命令：优先用带覆盖文件的方式（这样能正确解析 nginx 服务，
 # 但备份只需要 db，所以即使 nginx 没起来也能用）。
@@ -78,7 +78,7 @@ if [ ! -w "${BACKUP_DIR}" ]; then
 fi
 
 STAMP="$(date +%F-%H%M%S)"
-FILE="${BACKUP_DIR}/aura-${STAMP}.dump"
+FILE="${BACKUP_DIR}/haiou-${STAMP}.dump"
 
 # ---- 执行备份 ----------------------------------------------------------------
 # pg_dump -Fc：自定义格式，压缩且可选择性恢复（比纯 SQL 快得多）。
@@ -117,7 +117,7 @@ sha256sum "${FILE}" > "${FILE}.sha256"
 DB_CID="$(${COMPOSE_BASE} ps -q db 2>/dev/null || true)"
 [ -n "${DB_CID}" ] || die "拿不到 db 容器 ID，无法执行结构校验"
 
-CHECK_FILE="/tmp/aura-check-$$.dump"
+CHECK_FILE="/tmp/haiou-check-$$.dump"
 if ! docker cp "${FILE}" "${DB_CID}:${CHECK_FILE}" >/dev/null 2>&1; then
     die "无法把备份复制进 db 容器以校验结构（备份文件已保留：${FILE}）"
 fi
@@ -134,7 +134,7 @@ log "备份完成：${FILE}（${SIZE}）"
 
 # ---- 清理过期备份 ------------------------------------------------------------
 # 用 -mtime "+${KEEP_DAYS}"：严格大于 N 天，避免刚生成的文件被误删。
-DELETED="$(find "${BACKUP_DIR}" -type f -name 'aura-*.dump*' -mtime "+${KEEP_DAYS}" -delete -print | wc -l)"
+DELETED="$(find "${BACKUP_DIR}" -type f -name 'haiou-*.dump*' -mtime "+${KEEP_DAYS}" -delete -print | wc -l)"
 [ "${DELETED}" -gt 0 ] && log "已清理 ${DELETED} 个过期备份（保留 ${KEEP_DAYS} 天）"
 
 # ---- 磁盘空间自检 ------------------------------------------------------------
@@ -149,7 +149,7 @@ if [ "${USED_PCT:-0}" -ge 85 ]; then
 fi
 
 # ---- 最近备份信息（便于监控/面板联动）---------------------------------------
-LATEST="$(find "${BACKUP_DIR}" -maxdepth 1 -name 'aura-*.dump' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -n1 | cut -d' ' -f2- || true)"
+LATEST="$(find "${BACKUP_DIR}" -maxdepth 1 -name 'haiou-*.dump' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -n1 | cut -d' ' -f2- || true)"
 if [ -n "${LATEST}" ]; then
     log "最新备份：${LATEST}（$(date -r "${LATEST}" '+%F %T')）"
 else
@@ -164,8 +164,8 @@ fi
 #   不适用，无需清理（若真要清容器/临时产物，那是部署内部的 /tmp，交给应用自己）。
 #
 # 配置示例（写入运行用户的 ~/.bashrc 或在调用前 export）：
-#   export OPS_OFFSITE_TRANS="rsync -az --delete ${BACKUP_DIR}/ backup@你的另一台:/backup/aura/"
-#   export OPS_OFFSITE_TRANS="rclone copy ${BACKUP_DIR} remote:aura-backups/db --include 'aura-*.dump*'"
+#   export OPS_OFFSITE_TRANS="rsync -az --delete ${BACKUP_DIR}/ backup@你的另一台:/backup/haiou/"
+#   export OPS_OFFSITE_TRANS="rclone copy ${BACKUP_DIR} remote:haiou-backups/db --include 'haiou-*.dump*'"
 # ⚠️ 配了务必手工先跑一次确认文件真到远端，否则"以为备份了"最致命。
 OTS=""
 if [ -z "${OPS_OFFSITE_TRANS:-}" ] && [ -f "${ENV_FILE}" ]; then

@@ -1,4 +1,4 @@
-# aura 数据库备份（Docker Compose 版）
+# haiou 数据库备份（Docker Compose 版）
 #
 # Docker 部署形态：宿主机没有 PostgreSQL 可执行文件，备份必须 docker compose exec
 # 进容器执行 `deploy/docker/backup.sh`。由本 unit + timer 每天触发。
@@ -8,8 +8,8 @@
 #    你会以为备份每天在跑，其实一次都没跑过。
 #    本文件由 deploy/docker/fix-crlf.sh --install 自动安装并做 LF 化。
 [Unit]
-Description=aura database backup (Docker Compose)
-Documentation=file:///opt/aura/docs/应急恢复手册.md
+Description=haiou database backup (Docker Compose)
+Documentation=file:///opt/haiou/docs/应急恢复手册.md
 # 依赖 docker 服务，但不强Require：Docker 挂了 systemd 会跳过本服务，
 # 用 Persistent=true 在下次开机补跑即可。强依赖会让一次 Docker 重启
 # 把所有备份单元一起干掉。
@@ -19,8 +19,8 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 # 路径按实际部署位置调整；fix-crlf.sh --install 会替换为实际 APP_ROOT
-ExecStart=/opt/aura/deploy/docker/backup.sh
-WorkingDirectory=/opt/aura
+ExecStart=/opt/haiou/deploy/docker/backup.sh
+WorkingDirectory=/opt/haiou
 
 # 备份要全表扫描 + 写文件。降优先级避免和在线业务抢 IO 与 CPU。
 # 2C2G 机器上这个尤其重要：备份时线上延迟不应有明显抬升。
@@ -29,9 +29,9 @@ IOSchedulingClass=best-effort
 IOSchedulingPriority=6
 
 # 环境隔离：不继承系统级环境变量，避免误用其他项目的 DATABASE_URL 等。
-Environment=BACKUP_DIR=/opt/aura/data/backups/db
+Environment=BACKUP_DIR=/opt/haiou/data/backups/db
 Environment=KEEP_DAYS=14
-Environment=DB_NAME=aura
+Environment=DB_NAME=haiou
 
 # ---- 安全加固 -------------------------------------------------------------
 # 备份 dump 含用户邮箱、订单号、上游订单凭据，按敏感文件对待。
@@ -50,7 +50,7 @@ ProtectControlGroups=true
 # 备份不需要任何特权设备
 PrivateDevices=true
 # 显式放开备份落盘目录
-ReadWritePaths=/opt/aura/data/backups
+ReadWritePaths=/opt/haiou/data/backups
 
 [Install]
 WantedBy=multi-user.target

@@ -20,7 +20,7 @@ function downloadCsv(batch: string, codes: string[]) {
   const body = ["batch,code", ...codes.map(code => `${batch},${code}`)].join("\n");
   const url = URL.createObjectURL(new Blob([`\uFEFF${body}\n`], { type: "text/csv;charset=utf-8" }));
   const link = document.createElement("a");
-  link.href = url; link.download = `aura-cdk-${batch}.csv`; link.click();
+  link.href = url; link.download = `haiou-cdk-${batch}.csv`; link.click();
   URL.revokeObjectURL(url);
 }
 

@@ -1,7 +1,7 @@
 # ============================================================================
 # 源站防护：可选的"只允许 Cloudflare 回源"
 #
-# 加载顺序 20-。由 .env 的 AURA_TRUST_CLOUDFLARE_ONLY 控制是否启用
+# 加载顺序 20-。由 .env 的 HAIOU_TRUST_CLOUDFLARE_ONLY 控制是否启用
 # （entrypoint.sh 按该变量渲染此模板）。
 #
 # 【为什么需要它】
@@ -31,7 +31,7 @@
 # 只能靠 geo（原生支持 CIDR）。
 # ============================================================================
 
-geo $aura_from_cloudflare {
+geo $haiou_from_cloudflare {
     default 0;
 
     # ---- Cloudflare IPv4（官方 https://www.cloudflare.com/ips/ ，2026-10核对）----
@@ -71,14 +71,14 @@ geo $aura_from_cloudflare {
 }
 
 server {
-    # 独立端口，不与 10-aura.conf 的 443 冲突。
-    # 用途：Cloudflare 回源可以指向这个端口（AURA_CF_ORIGIN_PORT），
+    # 独立端口，不与 10-haiou.conf 的 443 冲突。
+    # 用途：Cloudflare 回源可以指向这个端口（HAIOU_CF_ORIGIN_PORT），
     #从而让 443 端口对公网**完全关闭** —— 这是隐藏源站最彻底的做法。
     #
-    # 常规用法：保留 AURA_TRUST_CLOUDFLARE_ONLY=false（默认），
+    # 常规用法：保留 HAIOU_TRUST_CLOUDFLARE_ONLY=false（默认），
     # 本文件不启用、443 正常服务；只有决定"关掉 443"时才把它打开。
     listen      ${NGINX_CF_GUARD_PORT};
-    server_name ${AURA_DOMAIN};
+    server_name ${HAIOU_DOMAIN};
 
     ssl_certificate      ${NGINX_SSL_CERT};
     ssl_certificate_key  ${NGINX_SSL_KEY};
@@ -90,17 +90,17 @@ server {
 
     # 真正的判据：$realip_remote_addr（真实 TCP 对端 = CF 边缘节点）
     # 不是 $remote_addr（已被 realip 还原成访客 IP）
-    if ($aura_from_cloudflare = 0) {
+    if ($haiou_from_cloudflare = 0) {
         # 403 会告诉扫描器"这里有个 Web 服务器"。
         # 换成 return 444 能完全不留痕迹（立即断连不返回响应），
         # 代价是排查时看不到任何日志线索。默认 403，优先可观测性。
         return 403;
     }
 
-    # 放行后与 10-aura.conf 保持一致的代理设置
+    # 放行后与 10-haiou.conf 保持一致的代理设置
     location / {
-        limit_req  zone=aura_req burst=40 nodelay;
-        proxy_pass http://aura_app;
+        limit_req  zone=haiou_req burst=40 nodelay;
+        proxy_pass http://haiou_app;
 
         proxy_http_version    1.1;
         proxy_set_header      Connection "";

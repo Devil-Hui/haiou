@@ -6,7 +6,7 @@
 # 【为什么必须有这个文件】
 # 应用侧 clientIp() 在 TRUSTED_PROXY_HOPS=0 时**只读 X-Real-IP**，
 # 意图是"Nginx 已把 CF 校验过的真实 IP 写进去了"。
-# 但裸机版 deploy/nginx-aura.conf 里并没有这段逻辑 —— 文档写了、配置没落地，
+# 但裸机版 deploy/nginx-haiou.conf 里并没有这段逻辑 —— 文档写了、配置没落地，
 # 结果是：接上 Cloudflare 后 X-Real-IP 里是 **CF 边缘节点 IP**，
 # 全站访客共用同一个限流桶（一个访客触发限流，所有人一起被限流）。
 # 本文件就是这个缺失环节的实现。

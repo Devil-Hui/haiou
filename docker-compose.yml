@@ -4,15 +4,15 @@
 # 1. 数据库不映射宿主机端口，只在 compose 内部网络可达。Docker 发布的端口会绕过
 #    ufw/iptables，把 5432 映射到公网等于把数据库直接暴露出去。
 # 2. 应用只绑定 127.0.0.1，公网入口交给外层 Nginx（用 deploy/docker-compose.nginx.yml 叠加）。
-name: aura
+name: haiou
 
 services:
   db:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-aura}
-      POSTGRES_USER: ${POSTGRES_USER:-aura}
+      POSTGRES_DB: ${POSTGRES_DB:-haiou}
+      POSTGRES_USER: ${POSTGRES_USER:-haiou}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?请在项目根目录的 .env 中设置 POSTGRES_PASSWORD}
     volumes:
       # 相对路径：数据落在仓库根的 ./data/postgres，随项目一起搬走
@@ -71,7 +71,7 @@ services:
     stop_signal: SIGINT
     stop_grace_period: 30s
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-aura} -d ${POSTGRES_DB:-aura}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-haiou} -d ${POSTGRES_DB:-haiou}"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -95,7 +95,7 @@ services:
       - path: .env
         required: false
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-aura}:${POSTGRES_PASSWORD:?请在 .env 中设置 POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-aura}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-haiou}:${POSTGRES_PASSWORD:?请在 .env 中设置 POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-haiou}
       ADMIN_SETUP_TOKEN: ${ADMIN_SETUP_TOKEN:?生产环境必须设置 ADMIN_SETUP_TOKEN，否则初始化会被拒绝}
       # 前面只有一层反向代理，取 X-Forwarded-For 的最后一跳。
       #
@@ -117,7 +117,7 @@ services:
       # 为什么不留在容器里：容器一重建 logs/ 就没了，而 audit（资金/权限变更）要留 365 天、
       # payment（支付回调原文）要留 180 天作为举证材料——这两类丢了无法补。
       # 不挂卷等于把举证材料放在一个随时会被重建抹掉的目录里。
-      AURA_LOG_DIR: /app/logs
+      HAIOU_LOG_DIR: /app/logs
     volumes:
       # ⚠️ 宿主目录的属主必须是容器内 node 用户的 uid（alpine node 镜像为 1000），
       # 否则容器写不进日志——而日志模块是"吞错降级"的，写失败不报错，

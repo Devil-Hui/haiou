@@ -130,30 +130,30 @@ log "行尾符自检通过"
 install_timers() {
     command -v systemctl >/dev/null 2>&1 || die "这台机器没有 systemctl，跳过定时任务安装"
 
-    UNIT_DIR="${AURA_SYSTEMD_DIR:-/etc/systemd/system}"
-    [ -d "${UNIT_DIR}" ] || die "找不到 ${UNIT_DIR}，请用 AURA_SYSTEMD_DIR 指定"
+    UNIT_DIR="${HAIOU_SYSTEMD_DIR:-/etc/systemd/system}"
+    [ -d "${UNIT_DIR}" ] || die "找不到 ${UNIT_DIR}，请用 HAIOU_SYSTEMD_DIR 指定"
 
     # Docker 部署形态：备份/演练走容器内执行，unit 用 deploy/docker/systemd/ 下的 Docker 版。
     log "写入 systemd 单元到 ${UNIT_DIR}"
-    for u in aura-docker-backup.service aura-docker-backup.timer \
-             aura-docker-restore-check.service aura-docker-restore-check.timer \
-             aura-docker-maintenance.service aura-docker-maintenance.timer \
-             aura-docker-log-prune.service aura-docker-log-prune.timer; do
+    for u in haiou-docker-backup.service haiou-docker-backup.timer \
+             haiou-docker-restore-check.service haiou-docker-restore-check.timer \
+             haiou-docker-maintenance.service haiou-docker-maintenance.timer \
+             haiou-docker-log-prune.service haiou-docker-log-prune.timer; do
         src="${APP_ROOT}/deploy/docker/systemd/${u}"
         [ -f "${src}" ] || die "缺少单元文件：${src}"
 
-        # 单元文件里的 /opt/aura 是占位符，必须替换成实际部署路径。
+        # 单元文件里的 /opt/haiou 是占位符，必须替换成实际部署路径。
         # 直接 cp 而不替换 = ExecStart 指向不存在的文件，
         # systemd 会报 "No such file or directory" 且 timer 一直不绿。
-        sed "s#/opt/aura#${APP_ROOT}#g" "${src}" > "${UNIT_DIR}/${u}"
+        sed "s#/opt/haiou#${APP_ROOT}#g" "${src}" > "${UNIT_DIR}/${u}"
         chmod 0644 "${UNIT_DIR}/${u}"
         log "  安装 ${u}（路径 → ${APP_ROOT}）"
     done
 
     # 安装后立刻验证路径正确性：ExecStart 指向的文件必须存在且可执行。
     # 这一步能在 enable 之前就抓出"路径写错"这类低级错误。
-    for u in aura-docker-backup.service aura-docker-restore-check.service \
-             aura-docker-maintenance.service aura-docker-log-prune.service; do
+    for u in haiou-docker-backup.service haiou-docker-restore-check.service \
+             haiou-docker-maintenance.service haiou-docker-log-prune.service; do
         exe="$(grep -E '^ExecStart=' "${UNIT_DIR}/${u}" | head -n1 | cut -d= -f2- || true)"
         [ -n "${exe}" ] || die "${u} 里没有 ExecStart"
         if [ ! -x "${exe}" ]; then
@@ -163,31 +163,31 @@ install_timers() {
     done
 
     # systemd 自身也校验一遍单元语法（不启动服务）
-    systemd-analyze verify "${UNIT_DIR}/aura-docker-backup.service" \
+    systemd-analyze verify "${UNIT_DIR}/haiou-docker-backup.service" \
         > /dev/null 2>&1 || warn "systemd-analyze verify 有告警（不影响安装，请人工确认上面日志）"
 
     systemctl daemon-reload
 
     # 先 enable 再 start --now：让"机器当时关机"的补跑机制（Persistent=true）生效，
     # 否则历史积压的定时点不会被补。
-    systemctl enable aura-docker-backup.timer aura-docker-restore-check.timer \
-                     aura-docker-maintenance.timer aura-docker-log-prune.timer >/dev/null
-    systemctl start  aura-docker-backup.timer aura-docker-restore-check.timer \
-                     aura-docker-maintenance.timer aura-docker-log-prune.timer
+    systemctl enable haiou-docker-backup.timer haiou-docker-restore-check.timer \
+                     haiou-docker-maintenance.timer haiou-docker-log-prune.timer >/dev/null
+    systemctl start  haiou-docker-backup.timer haiou-docker-restore-check.timer \
+                     haiou-docker-maintenance.timer haiou-docker-log-prune.timer
 
     echo
     log "定时任务已启用："
-    systemctl list-timers 'aura-docker-*' --no-pager --all | sed 's/^/    /'
+    systemctl list-timers 'haiou-docker-*' --no-pager --all | sed 's/^/    /'
     echo
     log "立即试跑一次备份（验证脚本可用，不等今晚）："
-    log "    systemctl start aura-docker-backup.service"
+    log "    systemctl start haiou-docker-backup.service"
     log "立即试跑一次维护任务（订单过期/充值推进/凭证抹除）："
-    log "    systemctl start aura-docker-maintenance.service"
+    log "    systemctl start haiou-docker-maintenance.service"
     log "查看结果："
-    log "    journalctl -u aura-docker-backup.service -n 50 --no-pager"
-    log "    journalctl -u aura-docker-maintenance.service -n 50 --no-pager"
+    log "    journalctl -u haiou-docker-backup.service -n 50 --no-pager"
+    log "    journalctl -u haiou-docker-maintenance.service -n 50 --no-pager"
     echo
-    log "取消定时：systemctl disable --now aura-docker-backup.timer aura-docker-restore-check.timer aura-docker-maintenance.timer aura-docker-log-prune.timer"
+    log "取消定时：systemctl disable --now haiou-docker-backup.timer haiou-docker-restore-check.timer haiou-docker-maintenance.timer haiou-docker-log-prune.timer"
 }
 
 if [ "${INSTALL_TIMER}" -eq 1 ]; then

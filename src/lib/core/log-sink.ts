@@ -20,7 +20,7 @@
 //   3. 追加写、不阻塞。同步 writeFileSync 会拖慢事件循环，
 //      在支付回调这种热路径上是不可接受的。
 // 保留期：本模块只负责写，不负责删。裸机时代靠宿主机 logrotate（已随裸机部署移除）；
-// 容器化部署下 AURA_LOG_DIR 指向应用数据卷，保留策略由运维按 compose 挂载决定。
+// 容器化部署下 HAIOU_LOG_DIR 指向应用数据卷，保留策略由运维按 compose 挂载决定。
 // ---------------------------------------------------------------------------
 import { appendFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
@@ -38,9 +38,9 @@ const ROUTES: Record<LogCategory, { min: number }> = {
 const LEVELS: Record<string, number> = { debug: 10, info: 20, warn: 30, error: 40 };
 
 function root(): string {
-  // 默认落在项目下的 logs/。生产用环境变量指到 /var/log/aura 之类的独立分区，
+  // 默认落在项目下的 logs/。生产用环境变量指到 /var/log/haiou 之类的独立分区，
   // 这样日志写满不会连带把数据库所在盘一起占满。
-  return process.env.AURA_LOG_DIR || join(process.cwd(), "logs");
+  return process.env.HAIOU_LOG_DIR || join(process.cwd(), "logs");
 }
 
 let dirReady: Promise<void> | null = null;

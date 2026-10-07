@@ -1,6 +1,6 @@
-# 每日 aura 数据库备份（Docker Compose 版）
+# 每日 haiou 数据库备份（Docker Compose 版）
 [Unit]
-Description=Daily aura database backup (Docker Compose)
+Description=Daily haiou database backup (Docker Compose)
 
 [Timer]
 # 凌晨低峰。03:30 不是随手选的：

@@ -1,4 +1,4 @@
-# aura 应用日志清理（Docker Compose 版）
+# haiou 应用日志清理（Docker Compose 版）
 #
 # 每天按类别保留期删除过期日志：app 14 / error 30 / audit 365 / payment 180 天。
 # 不做这件事，持久化后的日志会一直增长直到写满盘——而盘满会连累同盘的 PostgreSQL。
@@ -8,16 +8,16 @@
 #    你会以为清理在跑，其实一次都没跑过。
 #    本文件由 deploy/docker/fix-crlf.sh --install 自动安装并做 LF 化。
 [Unit]
-Description=aura application log pruning (Docker Compose)
-Documentation=file:///opt/aura/deploy/README.md
+Description=haiou application log pruning (Docker Compose)
+Documentation=file:///opt/haiou/deploy/README.md
 # 只碰本地文件，不需要网络。放在备份之后，避免和备份抢 IO。
 After=docker.service
 
 [Service]
 Type=oneshot
 # 路径按实际部署位置调整；fix-crlf.sh --install 会替换为实际 APP_ROOT
-ExecStart=/opt/aura/deploy/docker/log-prune.sh
-WorkingDirectory=/opt/aura
+ExecStart=/opt/haiou/deploy/docker/log-prune.sh
+WorkingDirectory=/opt/haiou
 
 # 日志目录可能很大，find 遍历需要一点时间；给足上限但不要无限等。
 TimeoutStartSec=300
@@ -33,7 +33,7 @@ ProtectHome=read-only
 ProtectKernelTunables=true
 ProtectControlGroups=true
 PrivateDevices=true
-ReadWritePaths=/opt/aura/data/logs
+ReadWritePaths=/opt/haiou/data/logs
 
 [Install]
 WantedBy=multi-user.target

@@ -11,7 +11,7 @@ import { writeLine } from "./log-sink";
 //      这类必须落审计，字段里只放可追溯的事实。
 //   5. 密钥、口令、令牌、卡密明文、私钥一律不记录；需要标识主体时用脱敏值。
 //
-// 环境变量 AURA_LOG_LEVEL 可调级别（debug|info|warn|error），默认 info。
+// 环境变量 HAIOU_LOG_LEVEL 可调级别（debug|info|warn|error），默认 info。
 //
 // 落盘：同时写 stdout（供 journald/systemd 采集）与按类别分层的文件。
 // 两份都要有——stdout 便于 tail -f 与容器采集，文件便于长期留存与按类排查。
@@ -23,7 +23,7 @@ export type Fields = Record<string, string | number | boolean | null | undefined
 const LEVELS: Record<LogLevel, number> = { debug: 10, info: 20, warn: 30, error: 40 };
 
 function threshold(): number {
-  const raw = (process.env.AURA_LOG_LEVEL || "info").toLowerCase() as LogLevel;
+  const raw = (process.env.HAIOU_LOG_LEVEL || "info").toLowerCase() as LogLevel;
   return LEVELS[raw] ?? LEVELS.info;
 }
 

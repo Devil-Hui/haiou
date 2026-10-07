@@ -3,7 +3,7 @@
 # status.sh — 一键运行态概览（安全门保护）
 #
 # 汇总：compose 服务、systemd 定时器、磁盘占用、今日日志量、关键端口。
-# 只读。适合日常巡检与投稿；详细诊断请再跑 aura-doctor。
+# 只读。适合日常巡检与投稿；详细诊断请再跑 haiou-doctor。
 #
 # 用法：bash deploy/doctor/status.sh
 # ============================================================================
@@ -26,7 +26,7 @@ fi
 echo
 printf '%s== 2) systemd 定时器（若用 systemd 部署）==%s\n' "${C_BOLD}" "${C_RST}"
 if command -v systemctl >/dev/null 2>&1; then
-    systemctl list-timers 'aura-docker-*' --no-pager --all 2>/dev/null | sed 's/^/   /' || echo "  (无 aura-docker timers)"
+    systemctl list-timers 'haiou-docker-*' --no-pager --all 2>/dev/null | sed 's/^/   /' || echo "  (无 haiou-docker timers)"
 else
     echo "  （非 systemd 环境，跳过）"
 fi
@@ -123,4 +123,4 @@ else
 fi
 echo "   提示：端口/防火墙/安全组全量核查 → bash deploy/doctor/checks/ports.sh"
 echo
-printf '%s运行态概览结束。深度诊断：bash deploy/doctor/aura-doctor.sh%s\n' "${C_BOLD}" "${C_RST}"
+printf '%s运行态概览结束。深度诊断：bash deploy/doctor/haiou-doctor.sh%s\n' "${C_BOLD}" "${C_RST}"

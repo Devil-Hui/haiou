@@ -5,7 +5,7 @@ import "./cdk-shop.css";
 import { NoticeBar } from "@/components/notice-bar";
 
 export const metadata: Metadata = {
-  title: { default: "aura · AI 能量补给站", template: "%s · aura" },
+  title: { default: "haiou · AI 能量补给站", template: "%s · haiou" },
   description: "ChatGPT、Claude、Grok、Gemini 一站式 AI 订阅代充。简洁透明的套餐、灵活支付与全程可查询的订单，为每一份灵感持续补给能量。",
   robots: { index: true, follow: true },
 };

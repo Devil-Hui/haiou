@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================================
-# ops.sh — aura 运维统一入口（一个命令分发所有 sh + 断点/dry-run）
+# ops.sh — haiou 运维统一入口（一个命令分发所有 sh + 断点/dry-run）
 #
 # 目标：把零散在 deploy/docker/、deploy/doctor/ 的各脚本收拢到一个入口，
 #       同时支持"断点测试"——先 --dry-run 看要跑什么（不执行），再正式跑。
@@ -12,7 +12,7 @@
 #   bash deploy/ops.sh nginx-verify              # Nginx 校验
 #
 # 说明：**不物理搬动任何脚本**。deploy/docker/*.sh 与 deploy/doctor/*.sh 保持原位，
-#     因为 4 个 systemd 定时器硬编码引用 /opt/aura/deploy/docker/*.sh，移动会破坏已装 unit。
+#     因为 4 个 systemd 定时器硬编码引用 /opt/haiou/deploy/docker/*.sh，移动会破坏已装 unit。
 #     本脚本只做「按名分发」，是纯转发层，零系统副作用。
 #
 # 关联：deploy/运维总控.md（看懂跑什么 -> 跑哪条）。
@@ -54,7 +54,7 @@ declare -A ROUTE=(
     # 运维/体检/状态
     [status]="${DR}/status.sh"
     [logs]="${DR}/logs.sh"
-    [doctor]="${DR}/aura-doctor.sh"
+    [doctor]="${DR}/haiou-doctor.sh"
     [init]="${DR}/init.sh"
     [secure-user]="${DR}/secure-user.sh"
     # 独立子检查（断点：可单独一条）

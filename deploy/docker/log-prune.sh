@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================================
-# aura 应用日志清理（Docker Compose 版）
+# haiou 应用日志清理（Docker Compose 版）
 #
 # 保留期按类别区分——这是刻意的设计，不是随手定的天数：
 #   logs/app/      运行日志     14 天   排障够用即可，多了只是占盘
@@ -13,7 +13,7 @@
 #   没有清理就会一直增长，直到把盘写满。盘满的后果不是"日志写不进去"，
 #   而是 PostgreSQL 一起挂掉（同一个盘）。这是从"丢日志"变成"丢服务"。
 #
-# 由 aura-docker-log-prune.timer 每天触发，也可手工执行：
+# 由 haiou-docker-log-prune.timer 每天触发，也可手工执行：
 #   bash deploy/docker/log-prune.sh
 #   DRY_RUN=1 bash deploy/docker/log-prune.sh     # 只看会删什么
 # ============================================================================
@@ -23,7 +23,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
-LOG_DIR="${AURA_LOG_DIR:-${APP_ROOT}/data/logs}"
+LOG_DIR="${HAIOU_LOG_DIR:-${APP_ROOT}/data/logs}"
 DRY_RUN="${DRY_RUN:-0}"
 
 log() { printf '[log-prune] %s\n' "$*"; }
@@ -47,7 +47,7 @@ if [ ! -d "${LOG_DIR}" ]; then
     # 之后只要应用在跑，目录就一定在。走到这里是异常，必须能让 timer/监控看到。
     printf '[log-prune] 错误 QL_001：日志目录不存在，清理未执行：%s\n' "${LOG_DIR}" >&2
     printf '[log-prune]    请先创建并确认卷映射：mkdir -p "%s" && chown 1000:1000 "%s"\n' "${LOG_DIR}" "${LOG_DIR}" >&2
-    printf '[log-prune]    或在 docker-compose 中确认 AURA_LOG_DIR 与卷映射正确。\n' >&2
+    printf '[log-prune]    或在 docker-compose 中确认 HAIOU_LOG_DIR 与卷映射正确。\n' >&2
     exit 1
 fi
 

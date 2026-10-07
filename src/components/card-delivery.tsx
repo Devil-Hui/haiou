@@ -59,7 +59,7 @@ export default function CardDelivery({ orderId, orderCode, password }: { orderId
     const href = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = href;
-    link.download = `aura-cdk-${code}.csv`;
+    link.download = `haiou-cdk-${code}.csv`;
     link.click();
     URL.revokeObjectURL(href);
   }

@@ -112,7 +112,7 @@ try {
   }
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: '导出本页' }).click();
-  assert.match((await download).suggestedFilename(), /aura-orders/);
+  assert.match((await download).suggestedFilename(), /haiou-orders/);
   await page.getByRole('button', { name: '已完成', exact: true }).click();
   await page.locator('.data-table .status-completed').waitFor();
   assert.equal((await call(`/api/orders/${second.data.id}`, 'PATCH', { action: 'cancel' })).status, 409);

@@ -6,7 +6,7 @@
 # 自定义函数/过程是否存在。只读，不做任何写库操作。
 #
 # 用法：bash deploy/doctor/checks/db-review.sh
-# 被 aura-doctor.sh 收拢；也可独立执行。
+# 被 haiou-doctor.sh 收拢；也可独立执行。
 # ============================================================================
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

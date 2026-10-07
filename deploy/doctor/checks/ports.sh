@@ -10,7 +10,7 @@
 #      端口 8443 应「只对 CF 网段开」，否则等于没隐藏源站 IP）
 #
 # 只读，不改任何配置。可单独跑：bash deploy/doctor/checks/ports.sh
-# 也会被 aura-doctor.sh（--only=ports）串入全量体检。
+# 也会被 haiou-doctor.sh（--only=ports）串入全量体检。
 # 关联：deploy/运维总控.md；docs/部署操作手册.md §5.4（隐藏源站 IP）。
 # ============================================================================
 set -euo pipefail
@@ -71,7 +71,7 @@ if port_on "${PORT_HTTPS}"; then
     announce port-443 done "nginx ${PORT_HTTPS} 监听（HTTPS 对外）"
 else
     announce port-443 wait "nginx ${PORT_HTTPS} 未监听（未上 HTTPS/Cloudflare，或 nginx 未起）" \
-        "检查：bash deploy/doctor/aura-doctor.sh --only=connect"
+        "检查：bash deploy/doctor/haiou-doctor.sh --only=connect"
 fi
 if port_on "${PORT_HTTP}"; then
     announce port-80 done "nginx ${PORT_HTTP} 监听（→ 301 HTTPS）"

@@ -28,7 +28,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
-RUN_USER="${RUN_USER:-aura-srv}"          # 建议用名的普通用户
+RUN_USER="${RUN_USER:-haiou-srv}"          # 建议用名的普通用户
 SHELL_BIN="${SHELL_BIN:-/bin/bash}"
 APPLY=0
 if [ "${1:-}" = "--apply" ]; then APPLY=1; fi

@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # ============================================================================
-# aura-doctor 共享引擎
+# haiou-doctor 共享引擎
 #
 # 被 deploy/doctor/ 下的所有脚本 source（不要直接执行）。职责：
 #   1. SFG —— 安全门：本套件可整体开启「根密码（superuser gate）」，防未授权人员
-#      用 status / tail-errors / aura-doctor 偷看运行态。密码令牌存于项目外
+#      用 status / tail-errors / haiou-doctor 偷看运行态。密码令牌存于项目外
 #      的独立用户文件，默认打开（最开始的服务器即要求先配），可选 --no-gate 绕过。
 #   2. 共享状态：一套「已检测 / 待执行 / 未配置 / 已具备」的收拢式结论模型，
-#      供中央入口 aura-doctor.sh 展开式输出；每个子检查通过 announce 上报。
+#      供中央入口 haiou-doctor.sh 展开式输出；每个子检查通过 announce 上报。
 #   3. 容器与命令的可重复访问：compose 命令、db/app 容器探测、日志路径等。
 #
 # 约束（沿用项目铁律）：
@@ -23,9 +23,9 @@ APP_ROOT="$(cd "${DOCTOR_DIR}/../.." && pwd)"
 # ---- 常量与位点 ------------------------------------------------------------
 COMPOSE_BASE="${COMPOSE:-docker compose -f ${APP_ROOT}/docker-compose.yml -f ${APP_ROOT}/deploy/docker-compose.nginx.yml}"
 ENV_FILE="${APP_ROOT}/.env"
-STATE_DIR="${AURA_STATE_DIR:-${APP_ROOT}/data/doctor}"
+STATE_DIR="${HAIOU_STATE_DIR:-${APP_ROOT}/data/doctor}"
 STATE_FILE="${STATE_DIR}/steps.state"
-GATE_DIR="${AURA_GATE_DIR:-${APP_ROOT}/../.aura-doctor}"     # 项目外，防误提交
+GATE_DIR="${HAIOU_GATE_DIR:-${APP_ROOT}/../.haiou-doctor}"     # 项目外，防误提交
 GATE_FILE="${GATE_DIR}/gate.hash"
 LOG_PRUNE_CATS="app:14 error:30 audit:365 payment:180"
 
@@ -111,10 +111,10 @@ gate_init() {
     fi
     mkdir -p "${GATE_DIR}"
     if ! [ -t 0 ]; then
-        doc_err "检测到非交互环境（没有 TTY），且安全门未初始化。\n  请先在 TTY 下执行：bash ${DOCTOR_DIR}/aura-doctor.sh --gate-set\n  或在自动化中显式传 NO_GATE=1（不推荐）。"
+        doc_err "检测到非交互环境（没有 TTY），且安全门未初始化。\n  请先在 TTY 下执行：bash ${DOCTOR_DIR}/haiou-doctor.sh --gate-set\n  或在自动化中显式传 NO_GATE=1（不推荐）。"
         exit 2
     fi
-    printf '%s\n' "首次使用 aura-doctor，请先设置「安全门密码」（保护 status/logs/aura-doctor 等查看类工具）。"
+    printf '%s\n' "首次使用 haiou-doctor，请先设置「安全门密码」（保护 status/logs/haiou-doctor 等查看类工具）。"
     printf '%s\n' "规则：≥8 位。输入时不回显。"
     local P1 P2
     printf '新密码: '
@@ -132,7 +132,7 @@ gate_init() {
 # 校验一次输入
 gate_check() {
     [ -n "${NO_GATE:-}" ] && return 0
-    [ -f "${GATE_FILE}" ] || { doc_err "安全门未初始化，先执行 aura-doctor.sh --gate-set"; return 1; }
+    [ -f "${GATE_FILE}" ] || { doc_err "安全门未初始化，先执行 haiou-doctor.sh --gate-set"; return 1; }
     [ -t 0 ] || { doc_err "非交互环境且未提供密码，请传 NO_GATE=1（仅 CI，不推荐）。"; return 1; }
     local Pw want got
     printf '%s' "安全门密码: "
@@ -176,7 +176,7 @@ load_env_pg() {
     PG_USER="$(grep -E '^POSTGRES_USER=' "${ENV_FILE}" | tail -1 | cut -d= -f2- | tr -d '"'"'"' ')"
     PG_DB="$(grep  -E '^POSTGRES_DB=' "${ENV_FILE}" | tail -1 | cut -d= -f2- | tr -d '"'"'"' ')"
     PG_PASS="$(grep -E '^POSTGRES_PASSWORD=' "${ENV_FILE}" | tail -1 | cut -d= -f2- | tr -d '"'"'"' ')"
-    PG_USER="${PG_USER:-aura}"; PG_DB="${PG_DB:-aura}"
+    PG_USER="${PG_USER:-haiou}"; PG_DB="${PG_DB:-haiou}"
     [ -n "${PG_PASS}" ]
 }
 

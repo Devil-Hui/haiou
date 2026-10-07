@@ -46,11 +46,11 @@ export function saveRecent(order: RecentOrder) {
   const { deliveryToken: _omit, ...rest } = order;
   try {
     const recent = getRecent().filter(item => item.id !== order.id);
-    localStorage.setItem("aura_recent_orders", JSON.stringify([rest, ...recent].slice(0, 6)));
+    localStorage.setItem("haiou_recent_orders", JSON.stringify([rest, ...recent].slice(0, 6)));
   } catch { /* 隐私模式下写不进去 */ }
 }
 export function getRecent(): RecentOrder[] {
-  try { const value = JSON.parse(localStorage.getItem("aura_recent_orders") || "[]"); return Array.isArray(value) ? value.filter(item => item && typeof item.id === "string" && typeof item.code === "string").slice(0, 6) : []; } catch { return []; }
+  try { const value = JSON.parse(localStorage.getItem("haiou_recent_orders") || "[]"); return Array.isArray(value) ? value.filter(item => item && typeof item.id === "string" && typeof item.code === "string").slice(0, 6) : []; } catch { return []; }
 }
 export const errorMessage = (error: unknown) => {
   if (error instanceof Error) {
@@ -80,7 +80,7 @@ export const formatDate = (value: string | Date) => new Date(value).toLocaleStri
 // 反而方便买家回头再看；因此**不自动删除**，改由买家自行清缓存。
 // ---------------------------------------------------------------------------
 
-const TOKEN_PREFIX = "aura_delivery_token_";
+const TOKEN_PREFIX = "haiou_delivery_token_";
 
 export function saveDeliveryToken(orderCode: string, token: string): void {
   if (!orderCode || !token) return;
@@ -107,7 +107,7 @@ export function getDeliveryToken(orderCode: string): string {
 // 更保守的容器。
 // ---------------------------------------------------------------------------
 
-const PW_PREFIX = "aura_order_password_";
+const PW_PREFIX = "haiou_order_password_";
 
 export function saveOrderPassword(orderId: string, password: string): void {
   if (!orderId || !password) return;

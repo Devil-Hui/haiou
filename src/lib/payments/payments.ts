@@ -138,7 +138,7 @@ export async function preparePayment(order: Order, settings: PaymentSettings) {
         orderCode: order.code,
         amount: total,
         currency: "cny",
-        subject: `aura ${order.planName}`,
+        subject: `haiou ${order.planName}`,
         siteUrl: settings.siteUrl,
         orderId: order.id,
       },
@@ -163,7 +163,7 @@ export async function preparePayment(order: Order, settings: PaymentSettings) {
       orderCode: order.code,
       amount: usdt,
       currency: "usdt",
-      subject: `aura ${order.planName}`,
+      subject: `haiou ${order.planName}`,
       siteUrl: settings.siteUrl,
       orderId: order.id,
     });
@@ -193,7 +193,7 @@ export async function preparePayment(order: Order, settings: PaymentSettings) {
     notify_url: `${siteUrl}/api/payments/alipay/notify`,
     return_url: `${siteUrl}/orders/${order.id}/result`,
     // total_amount 必须是「实付」而不是商品价：含手续费，否则支付宝实收与订单金额对不上。
-    biz_content: JSON.stringify({ out_trade_no: order.code, total_amount: total, subject: `aura ${order.planName}`, product_code: "FAST_INSTANT_TRADE_PAY" }),
+    biz_content: JSON.stringify({ out_trade_no: order.code, total_amount: total, subject: `haiou ${order.planName}`, product_code: "FAST_INSTANT_TRADE_PAY" }),
   };
   params.sign = createSign("RSA-SHA256").update(canonical(params)).sign(pem(process.env.ALIPAY_PRIVATE_KEY!, "PRIVATE"), "base64");
   return { available: true, method, checkoutUrl: `${settings.alipayGateway}?${new URLSearchParams(params)}` };

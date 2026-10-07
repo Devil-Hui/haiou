@@ -84,8 +84,8 @@ check("形态3 空值被剔除", canonical(c3),
 // 发起侧：验签与签名必须同源同函数（防止再次分叉）
 const outbound: Record<string, string> = {
   pid: "1000", out_trade_no: "ORD1", notify_url: "https://x.example/n",
-  return_url: "https://x.example/r", money: "119.00", name: "aura plan",
-  sitename: "aura", type: "",
+  return_url: "https://x.example/r", money: "119.00", name: "haiou plan",
+  sitename: "haiou", type: "",
 };
 const signed = MD5(canonical(outbound) + key);
 check("发起侧签名可被同一 canonical 验回", MD5(canonical({ ...outbound, sign: signed }) + key), signed);

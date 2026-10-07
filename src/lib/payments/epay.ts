@@ -64,8 +64,8 @@ export function buildEpayUrl(order: Order, settings: PaymentSettings, type = "")
     return_url: `${settings.siteUrl.replace(/\/$/, "")}/orders/${order.id}/result`,
     // 收银台展示的金额必须与回调核对、支付页展示用的是同一个口径（orderTotal）。
     money: orderTotal(order),
-    name: `aura ${order.planName}`.slice(0, 100),
-    sitename: "aura",
+    name: `haiou ${order.planName}`.slice(0, 100),
+    sitename: "haiou",
     type,
   };
   params.sign = MD5(canonical(params) + key);

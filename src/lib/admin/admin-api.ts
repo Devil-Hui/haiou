@@ -350,7 +350,7 @@ async function handle(request: Request, context: Context) {
       if (!updated) return bad("订单状态刚刚发生变化，请刷新后重试", 409);
       // Money-relevant transition. The row only keeps updated_at, which cannot answer
       // "who moved this order to paid, and with what confirmation". One greppable line:
-      //   journalctl -u aura | grep 'category=audit'
+      //   journalctl -u haiou | grep 'category=audit'
       if (status !== order.status) {
         logger.audit("order.status_changed", {
           order: updated.code,

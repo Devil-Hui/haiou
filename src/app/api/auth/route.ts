@@ -12,7 +12,7 @@ const setupBlocked = () => !setupToken() && process.env.NODE_ENV === "production
 
 // Verified against whenever the account does not exist, so a missing or mismatched
 // username costs the same scrypt work as a wrong password. Kills user enumeration.
-const TIMING_EQUALIZER = hashPassword("aura-admin-credential-equalizer");
+const TIMING_EQUALIZER = hashPassword("haiou-admin-credential-equalizer");
 
 // 闸门：ADMIN_ACCESS 未开启时整个后台不存在，接口也必须一样。
 // 此前只有页面（layout / 登录页）查它，这个接口不查——登录页 404 而 POST /api/auth

@@ -124,7 +124,7 @@ export default function OrderLookup() {
     </section>
 
     {recent.length > 0 && <section className="recent-orders">
-      <div className="recent-heading"><h3>最近的订单</h3><button className="table-action" onClick={() => { try { localStorage.removeItem("aura_recent_orders"); } catch {} setRecent([]); }}><Trash2 size={12}/>清除本地记录</button></div>
+      <div className="recent-heading"><h3>最近的订单</h3><button className="table-action" onClick={() => { try { localStorage.removeItem("haiou_recent_orders"); } catch {} setRecent([]); }}><Trash2 size={12}/>清除本地记录</button></div>
       {recent.map(order => <Link key={order.id} href={`/orders/${order.id}/result`} className={`recent-order ${order.brand}`}><span className="plan-logo"><BrandIcon brand={order.brand}/></span><div><h4>{order.planName}</h4><p>{order.code}</p></div><ArrowUpRightIcon/></Link>)}
       <p className="summary-note" style={{ textAlign: "center", marginTop: 14 }}>仅展示当前浏览器保存的订单，请勿分享订单详情链接。</p>
     </section>}

@@ -10,7 +10,7 @@ import { digest } from "./password";
 // existing `@/lib/auth` imports across routes and scripts keep working.
 export * from "./password";
 
-export const SESSION_COOKIE = "aura_admin";
+export const SESSION_COOKIE = "haiou_admin";
 export const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 
 export async function currentAdmin() {
@@ -21,10 +21,10 @@ export async function currentAdmin() {
 }
 
 // ---- 普通用户会话 ----
-// 与管理员会话完全独立：独立 Cookie（aura_user）、独立表（users）、独立有效期。
+// 与管理员会话完全独立：独立 Cookie（haiou_user）、独立表（users）、独立有效期。
 // 放在这里而不是各自在路由里读，是为了让服务端组件（个人中心）与 API 用同一套判定，
 // 不会出现"页面认为已登录、接口认为未登录"的割裂。
-export const USER_COOKIE = "aura_user";
+export const USER_COOKIE = "haiou_user";
 export async function currentUser() {
   const token = (await cookies()).get(USER_COOKIE)?.value;
   if (!token || !/^[0-9a-f]{64}$/.test(token)) return null;

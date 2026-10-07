@@ -24,7 +24,7 @@ export const pool =
     max,
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 5000,
-    application_name: "aura-web",
+    application_name: "haiou-web",
   });
 
 if (process.env.NODE_ENV !== "production") {

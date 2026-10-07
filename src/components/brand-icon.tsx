@@ -1,6 +1,6 @@
 import { useId } from "react";
 
-export function AuraMark({ className = "" }: { className?: string }) {
+export function HaiouMark({ className = "" }: { className?: string }) {
   return <svg className={className} viewBox="0 0 40 40" fill="none" aria-hidden="true"><rect width="40" height="40" rx="12" fill="#E0EBDC"/><g stroke="#36604C" strokeWidth="4.3" strokeLinecap="round"><path d="M20 9v22M9 20h22M12.2 12.2l15.6 15.6M12.2 27.8l15.6-15.6"/></g></svg>;
 }
 export function BrandIcon({ brand, className = "" }: { brand: string; className?: string }) {

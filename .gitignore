@@ -1,0 +1,42 @@
+node_modules/
+.next/
+out/
+# docker-compose 的数据库卷，落在仓库根的 ./data
+data/
+.env
+.env.*
+!.env.example
+!.env.prod.example
+artifacts/
+*.tsbuildinfo
+.DS_Store
+
+# 本地运行残留：日志绝不能进版本库（可能含订单邮箱、路径等运行信息）
+*.log
+
+# AI 助手的会话规划稿：属于本地工作痕迹，不是项目文档，不进版本库。
+# （目录本身保留在本地，只是不被 git 跟踪）
+.codebuddy/
+
+# WorkBuddy 项目记忆（本地会话痕迹，含配置决策等本地信息，不进版本库）
+.workbuddy/
+
+# PowerShell 重定向失误产生的空文件
+$null
+
+# 编辑器与系统
+.vscode/
+.idea/
+Thumbs.db
+
+# 测试与调试产物
+coverage/
+playwright-report/
+test-results/
+
+# 运行期日志：含订单号与邮箱，绝不能进版本库
+logs/
+
+# 内部文档与交接资料：不进入私有代码仓库
+docs/
+README.md

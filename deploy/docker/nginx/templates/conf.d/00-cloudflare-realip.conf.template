@@ -1,0 +1,85 @@
+# ============================================================================
+# Cloudflare 前瞻性接入：真实客户端 IP 还原 + 边缘节点白名单
+#
+# 加载顺序 00-，早于业务站点配置。它只做两件事，都很关键。
+#
+# 【为什么必须有这个文件】
+# 应用侧 clientIp() 在 TRUSTED_PROXY_HOPS=0 时**只读 X-Real-IP**，
+# 意图是"Nginx 已把 CF 校验过的真实 IP 写进去了"。
+# 但裸机版 deploy/nginx-aura.conf 里并没有这段逻辑 —— 文档写了、配置没落地，
+# 结果是：接上 Cloudflare 后 X-Real-IP 里是 **CF 边缘节点 IP**，
+# 全站访客共用同一个限流桶（一个访客触发限流，所有人一起被限流）。
+# 本文件就是这个缺失环节的实现。
+# ============================================================================
+
+# ---- 1. 只信任 Cloudflare 官方 IP 段 ----------------------------------------
+#
+# set_real_ip_from 的语义是"仅当连接来自这些 IP 时，才采信下面的头部"。
+# 这一句是整个信任链的基石：
+#
+#   - 请求来自 CF 段→ 采信 CF-Connecting-IP，得到真实访客 IP  ✓
+#   - 请求不来自 CF 段（有人绕过 CF 直连源站）→ **完全不采信**，
+#     攻击者伪造 CF-Connecting-IP 头也无效  ✓
+#
+# 漏掉这个判断的后果：任何人直连源站并自带 CF-Connecting-IP: 1.2.3.4，
+# 就能任意伪造 IP，限流形同虚设。
+#
+# IP 段取自官方（2026-10 核对，官方会不定期调整，调整后需同步本文件）：
+#   https://www.cloudflare.com/ips/
+# 建议同时配 Cloudflare 的 authenticated_origin_batches / Authenticated Origin
+# Pulls 做第二层校验，但那是控制台侧的事，不在本文件范围。
+
+# ---- IPv4 ----
+set_real_ip_from 173.245.48.0/20;
+set_real_ip_from 103.21.244.0/22;
+set_real_ip_from 103.22.200.0/22;
+set_real_ip_from 103.31.4.0/22;
+set_real_ip_from 141.101.64.0/18;
+set_real_ip_from 108.162.192.0/18;
+set_real_ip_from 190.93.240.0/20;
+set_real_ip_from 188.114.96.0/20;
+set_real_ip_from 197.234.240.0/22;
+set_real_ip_from 198.41.128.0/17;
+set_real_ip_from 162.158.0.0/15;
+set_real_ip_from 104.16.0.0/13;
+set_real_ip_from 104.24.0.0/14;
+set_real_ip_from 172.64.0.0/13;
+set_real_ip_from 131.0.72.0/22;
+
+# ---- IPv6 ----
+# Cloudflare 对 IPv6 站点同样回源。漏掉这几段会导致 IPv6 访客的 IP 还原失效。
+set_real_ip_from 2400:cb00::/32;
+set_real_ip_from 2606:4700::/32;
+set_real_ip_from 2803:f800::/32;
+set_real_ip_from 2405:b500::/32;
+set_real_ip_from 2405:8100::/32;
+set_real_ip_from 2a06:98c0::/29;
+set_real_ip_from 2c0f:f248::/32;
+
+# 采信哪个头。CF-Connecting-IP 是 CF 边缘节点写入的、经过校验的真实客户端 IP。
+real_ip_header CF-Connecting-IP;
+
+# 递归查找：若头部里本身是逗号分隔的多个地址，从右往左跳过可信地址，
+# 取第一个不可信的作为真实 IP。
+real_ip_recursive on;
+
+# ============================================================================
+# 重要：以上指令生效后，$remote_addr **就是真实客户端 IP**。
+#
+# 这一点让下游的限流、连接数限制、日志全部自动正确：
+#   limit_req_zone $binary_remote_addr ...按真实访客 IP 计数 ✓
+#   limit_conn_zone $binary_remote_addr ... 按真实访客 IP 计数 ✓
+#   log_format main '$remote_addr ...'    日志里直接是访客 IP ✓
+#
+# 而 $realip_remote_addr 保留的是原始对端（CF 节点 IP），
+# 用于排查"是不是 CF 打过来的"。主配置的 log_format 两者都记了。
+#
+# 所以业务location 里**不需要**（也不应该）再手写
+#   proxy_set_header X-Real-IP $http_cf_connecting_ip;
+# 那种写法是文档里的方案 B：只在 CF 后面能用，一旦有第二个代理就取错，
+# 而且外部伪造的头必须逐个手工清零（容易漏）。realip 模块在**服务端**处理，
+# 伪造头在进入 Nginx 时就已失效，更难写错。
+#
+# 业务 location 里只需要：
+#   proxy_set_header X-Real-IP $remote_addr;   ← 现在这个值已经是真实 IP 了
+# ============================================================================

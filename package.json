@@ -1,0 +1,49 @@
+{
+  "name": "nextjs-postgresql-template",
+  "private": true,
+  "scripts": {
+    "admin:create": "tsx scripts/create-admin.mjs",
+    "admin:reset": "tsx scripts/reset-admin.mjs",
+    "build": "next build",
+    "check:paths": "node scripts/check-paths.mjs",
+    "dev": "next dev",
+    "e2e:recharge": "tsx scripts/recharge-e2e.mjs",
+    "lint": "eslint .",
+    "maintenance": "tsx scripts/maintenance.mjs",
+    "orders:expire": "tsx scripts/maintenance.mjs",
+    "pay:test": "tsx scripts/pay-gateway.test.mjs",
+    "smoke": "tsx scripts/smoke.mjs",
+    "start": "next start",
+    "start:prod": "node --env-file=.env.prod node_modules/next/dist/bin/next start",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "dotenv": "^18.0.5",
+    "drizzle-orm": "^0.45.3",
+    "lucide-react": "^1.52.0",
+    "next": "^16.3.8",
+    "pg": "8.20.0",
+    "qrcode": "^1.5.4",
+    "react": "19.2.6",
+    "react-dom": "19.2.6",
+    "tsx": "^4.23.15"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "4.1.17",
+    "@types/node": "^26.6.4",
+    "@types/pg": "8.18.0",
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "drizzle-kit": "^0.31.11",
+    "eslint": "^9.39.4",
+    "eslint-config-next": "^16.3.5",
+    "postcss": "^8.5.28",
+    "tailwindcss": "4.1.17",
+    "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "packageManager": "npm@11.6.2"
+}

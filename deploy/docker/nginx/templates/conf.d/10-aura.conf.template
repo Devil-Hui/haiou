@@ -1,0 +1,417 @@
+# ============================================================================
+# aura 站点配置（envsubst 模板）
+#
+# 部署时会被渲染到容器内 /etc/nginx/conf.d/aura.conf。
+# 所有 ${VAR} 由 .env 提供，未设置时走|| 后面的默认值——
+# 这样即使忘填也能起得来（降级但可用），而不是启动失败。
+#
+# 【这个项目是纯 SSR，没有上传接口】
+# client_max_body_size 收得很紧（默认 256k），是刻意的：
+# 正常请求体只有几百字节，任何超过 256k 的请求都可以直接判定为异常。
+#
+# 【Cloudflare 前提】
+# 站点假设在 Cloudflare 之后。真实 IP 由 00-cloudflare-realip.conf 在服务端还原，
+# 本文件不再信任任何客户端提供的头部。
+# ============================================================================
+
+# ---- 上游：Node 应用 ---------------------------------------------------------
+upstream aura_app {
+    # Compose 服务名：由 Docker 内置 DNS（127.0.0.11）解析到 app 容器 IP。
+    # 不用 127.0.0.1：容器内 127.0.0.1 是 Nginx 容器自己，不是应用。
+    server app:3000 max_fails=3 fail_timeout=10s;
+
+    # 与 Node 复用 TCP 长连接，省掉每次请求的握手（TLS 回源场景省得更多）。
+    # 64 条对应 100 并发目标：第 65 个并发请求开始排队等连接。
+    # 每条连接约占几十 KB，64 条在 2C2G 上不到 2 MB。
+    keepalive         64;
+    keepalive_requests  1000;
+    keepalive_timeout   60s;
+}
+
+# ---- HTTP/HTTPS 健康检查专用server -----------------------------------------
+# 供容器 HEALTHCHECK 探活使用（nginx.conf 里 curl http://127.0.0.1:9443/nginx-health）。
+#
+# 为什么单独开一个端口而不是探 80：走 80 会命中默认 server 或触发 301 跳转，
+# 探到的是"重定向能通"而不是"站点健康"。独立端口 + 精确 location，
+# 结果干净确定，且不产生外部可见的访问日志噪声。
+server {
+    listen      9443;
+    listen      [::]:9443;
+    server_name _;
+
+    # 不对外：只接受容器内/本机访问。
+    # Docker 默认桥接网络下，同网络的其他容器也能访问它——
+    # 该端口只返回固定字符串，不泄露任何信息，可接受。
+    # 若要更严，把 9443 从 compose 的 ports 里去掉（默认就不映射）。
+    access_log off;
+
+    location = /nginx-health {
+        # 200 + 固定 body，不 touch 后端，探活不应给应用加压。
+        add_header Content-Type text/plain always;
+        return 200 "ok\n";
+    }
+
+    # 其余一律拒绝：探活端口不是业务入口
+    location / { return 404; }
+}
+
+# ---- HTTP:仅做跳转与 ACME 校验 ------------------------------------------------
+server {
+    listen      80;
+    listen      [::]:80;
+    server_name ${AURA_DOMAIN};
+
+    # Cloudflare「始终使用 HTTPS」开启后，请求根本到不了这里；
+    # 但直连源站（攻击者或调试）仍可能打 80，所以该跳还是要跳。
+    #
+    # $host 来自请求的 Host 头。open_redirect 风险已由 .env 里的域名白名单消除：
+    # server_name 固定为AURA_DOMAIN，未匹配的 Host 会落到下面的 default 拒服 server。
+    return 301 https://$host$request_uri;
+
+    # ACME 证书签发/续期用。Cloudflare Origin CA 不需要这行（免签，15 年有效），
+    # 但保留它以便将来切回 Let's Encrypt 时无需改结构。
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+}
+
+# ---- HTTPS 主站 -------------------------------------------------------------
+server {
+    # Nginx 1.25.1 起推荐这样写：http2 是独立指令，不是 listen 的参数。
+    # 用旧写法（listen 443 ssl http2）在 1.25.1+ 会告警，1.29 已彻底移除。
+    listen      443 ssl;
+    listen      [::]:443 ssl;
+    http2       on;
+    server_name ${AURA_DOMAIN};
+
+    # ---- 证书 -------------------------------------------------------------
+    # Cloudflare Origin CA（推荐）：15 年有效期、免续期、强度更高。
+    # 代价：只有 CF 信任它，直连域名会报证书错误（仅影响调试，不影响用户）。
+    # 换回 Let's Encrypt：把下面两行指向 /etc/letsencrypt/live/<domain>/{fullchain,privkey}.pem
+    ssl_certificate      ${NGINX_SSL_CERT};
+    ssl_certificate_key  ${NGINX_SSL_KEY};
+
+    # ---- TLS 加固 ---------------------------------------------------------
+    # 只留 TLS 1.2/1.3。1.3 的握手更快且不需额外协商；
+    # 1.0/1.1 有已知缺陷，且主流浏览器已不再支持。
+    ssl_protocols        TLSv1.2 TLSv1.3;
+
+    # Mozilla 中间配置：与主流浏览器兼容，同时剔除弱套件。
+    ssl_ciphers          ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305;
+
+    # 交给客户端选套件。设on 会让老旧客户端拿到自己支持的弱套件，
+    # 加密强度下降；现代客户端在此策略下也能正常协商到强套件。
+    ssl_prefer_server_ciphers  off;
+
+    # 会话复用：5m 共享内存约可缓存 20000 条会话。
+    # 2C2G 上这是"让握手变便宜"的关键——复用省掉一次完整握手（含非对称运算）。
+    ssl_session_cache    shared:AuraSSL:5m;
+    ssl_session_timeout  1d;
+    # 关闭会话票据：票据是**自包含**的（Nginx 不查共享内存也能恢复会话），
+    # 无法集中吊销。前向保密下票据带来的收益有限，关闭更可控。
+    ssl_session_tickets  off;
+
+    # OCSP Stapling：把证书吊销状态随握手一起发出，客户端不必额外请求 CA。
+    # 能省掉每次握手的一次网络往返，对移动网络体验提升明显。
+    #
+    # ⚠️ ssl_trusted_certificate 不接受空串（空值会报
+    # "invalid number of arguments"），所以用它是否为空来决定整组 OCSP 指令的启用。
+    # Cloudflare Origin CA 不是公共 CA 签发、无公共 OCSP responder → 必须留空，
+    # 此时 entrypoint 会把下面三行连同本注释一起移除。
+    # 换回 Let's Encrypt 时：把 NGINX_SSL_TRUSTED_CERT 指向 chain.pem，三行自动生效。
+    # NGINX_OCSP_ENABLED 由 entrypoint.sh 依据变量是否存在注入。
+    ${NGINX_OCSP_BLOCK}
+
+    # ---- 站点级参数 -------------------------------------------------------
+    client_max_body_size   ${NGINX_MAX_BODY_SIZE};
+    client_body_timeout    15s;
+    send_timeout           30s;
+    keepalive_timeout      30s;
+    keepalive_requests     1000;
+
+    # 每 IP 并发连接上限 200。
+    # 这个值是最容易踩坑的一项：原 32 是按"单 IP 少量连接"定的，
+    # 而企业网/校园网/移动 NAT/Cloudflare 出口会让大量用户共用同一源 IP，
+    # 第 33 个请求即被拒 —— 表现为"部分人能访问、部分人不能"，极难定位。
+    # 注意：真实 IP 已由 realip 还原，所以这里按访客算，不会被 CF 节点串桶。
+    limit_conn             aura_conn 200;
+
+    # 限流命中转交 @too_many_requests 处理（该 location 定义在本 server 内）。
+    # "=" 带等号表示**内部重定向**：保留原请求方法与状态码语义，
+    # 不把 429 变成 302。
+    error_page 429 = @too_many_requests;
+
+    access_log             /var/log/nginx/aura.access.log  main;
+    error_log              /var/log/nginx/aura.error.log   warn;
+
+    # ---- 安全响应头 ---------------------------------------------------------
+    # 关键：Nginx 的 add_header 是"就近覆盖"而非"合并"——
+    # 只要 location 内出现任意一条 add_header，server 层继承的全部 add_header 都会失效。
+    # 本文件有多个 location 自带add_header（静态/API/orders/admin），
+    # 所以安全头不能只写在 server 层（那样这些 location 会一个都拿不到），
+    # 必须由各 location 显式 include 下面的片段。
+    include /etc/nginx/conf.d/aura-security-headers.conf;
+
+    server_tokens  off;
+
+    # ---- 限流：只打在动态请求上 -------------------------------------------
+    # 静态资源不打（见下），因为正常页面会并发拉几十个静态文件，
+    # 按 20r/s 限会误伤首屏。
+    location / {
+        limit_req zone=aura_req burst=40 nodelay;
+
+        # public/ 直出，找不到就回源给 Node。
+        # Dockerfile 已拷贝 public/ 到镜像，这里静态命中省掉 Node 的一次请求。
+        root  /app/public;
+        try_files $uri @app;
+    }
+
+    # ---- Next.js 静态产物：磁盘直出+ 长期缓存 -------------------------------
+    # 文件名带内容哈希（next 的 hash 机制），内容变了文件名就变，
+    # 所以可以放心设 immutable —— 变了就是新 URL，不存在缓存不一致。
+    location ^~ /_next/static/ {
+        alias /app/.next/static/;
+        access_log     off;              #量大且无排障价值，关掉可省磁盘 IO
+        expires        1y;
+        # 与本location 自己的 Cache-Control 并列（add_header 不合并，故需显式 include 安全头）
+        include /etc/nginx/conf.d/aura-security-headers.conf;
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
+
+        # 元数据缓存：把 stat() 结果（大小/权限/mtime）缓存在内存，
+        # 2 核机器上系统调用开销不小，缓存后命中率极高。
+        open_file_cache          max=2000 inactive=120s;
+        open_file_cache_valid    300s;
+        open_file_cache_min_uses 2;
+        open_file_cache_errors   on;      # 把"文件不存在"也缓存住，
+                                          # 防止扫描器靠猜路径打穿磁盘
+    }
+
+    # HMR 热更新：生产不跑 next dev，但保留这段会让本地排障更顺。
+    # WebSocket 升级（下面 map 的用途）在这里第一次真正派上用场。
+    location ^~ /_next/webpack-hmr {
+        proxy_pass http://aura_app;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade    $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        # 长连接不能被 proxy_read_timeout 掐断
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+    }
+
+    # ---- 首页 / 法务页：5 秒微缓存 -----------------------------------------
+    # 只缓存这两个**完全公开、不读 Cookie** 的页面。
+    # 它们不调用 cookies()，命中缓存不会串号。
+    location ~ ^/(legal)?$ {
+        limit_req zone=aura_req burst=40 nodelay;
+
+        proxy_cache             aura_html;
+        proxy_cache_key         "$scheme$host$request_uri";
+        proxy_cache_valid       200 5s;
+        proxy_cache_lock        on;   # 缓存失效瞬间只放一个请求回源，
+                                      # 其余等结果。避免"惊群"打爆 2 核
+        proxy_cache_use_stale   error timeout updating http_500 http_502 http_503;
+        proxy_cache_revalidate  on;
+
+        # ⚠️ 这行让 Nginx 忽略上游的 no-store。
+        # 安全性依赖前提：这两个页面不读 Cookie、不含用户数据。
+        # 将来若把任何个性化页面放进这个 location，必须先删掉它。
+        proxy_ignore_headers    Cache-Control Expires Set-Cookie;
+
+        proxy_pass              http://aura_app;
+        proxy_http_version      1.1;
+        proxy_set_header        Connection "";
+        proxy_set_header        Host              $host;
+        # $remote_addr 已被 00- 还原为真实客户端 IP
+        proxy_set_header        X-Real-IP         $remote_addr;
+        proxy_set_header        X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header        X-Forwarded-Proto $scheme;
+        proxy_set_header        X-Forwarded-Host  $host;
+
+        proxy_connect_timeout   5s;
+        proxy_read_timeout      30s;
+    }
+
+    # ---- API：不缓存 -------------------------------------------------------
+    # 匹配所有 /api/ 前缀。显式关闭缓存并加 no-store，
+    # 防止 Cloudflare 或浏览器缓存了含用户数据的响应。
+    location ^~ /api/ {
+        proxy_pass             http://aura_app;
+        proxy_http_version     1.1;
+        proxy_set_header       Connection "";
+
+        proxy_set_header       Host              $host;
+        proxy_set_header       X-Real-IP         $remote_addr;
+        proxy_set_header       X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header       X-Forwarded-Proto $scheme;
+        proxy_set_header       X-Forwarded-Host  $host;
+
+        # 应用据此判断是否给 Cookie 加 Secure
+        proxy_set_header       X-Forwarded-Port  $server_port;
+
+        proxy_connect_timeout  5s;
+        # 支付回调可能等上游较久
+        proxy_read_timeout     60s;
+        proxy_send_timeout     60s;
+
+        # 缓冲：2C2G 上不放大。8×16k + 32k busy ≈ 160KB/请求，
+        # 100 并发下约 16 MB，可接受。
+        proxy_buffering     on;
+        proxy_buffers       8 16k;
+        proxy_busy_buffers_size 32k;
+        # 临时文件落盘时的缓冲，2C2G 偏小
+        proxy_temp_file_write_size 64k;
+
+        # 保证客户端断开时上游也停，别让 Node 白跑
+        proxy_ignore_client_abort off;
+
+        include /etc/nginx/conf.d/aura-security-headers.conf;
+        add_header Cache-Control "no-store, no-cache, must-revalidate" always;
+    }
+
+    # ---- 订单页：绝不缓存 + Referrer 收敛 ----------------------------------
+    location ^~ /orders/ {
+        proxy_pass             http://aura_app;
+        proxy_http_version     1.1;
+        proxy_set_header       Connection "";
+        proxy_set_header       Host              $host;
+        proxy_set_header       X-Real-IP         $remote_addr;
+        proxy_set_header       X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header       X-Forwarded-Proto $scheme;
+
+        proxy_connect_timeout  5s;
+        proxy_read_timeout     30s;
+
+        # 订单页含订单号等敏感信息，Referer 不外泄（比全局更严）
+        include /etc/nginx/conf.d/aura-security-headers.conf;
+        add_header Referrer-Policy "no-referrer" always;
+        add_header Cache-Control "no-store" always;
+    }
+
+    # ---- 后台：限流更严+ 禁止索引 ------------------------------------------
+    location ^~ /admin {
+        # 后台是登录爆破的首要目标，限流收紧到 2r/s、突发 10。
+        # 正常用户操作后台不会触发这个频率。
+        limit_req  zone=aura_req burst=10 nodelay;
+
+        proxy_pass             http://aura_app;
+        proxy_http_version     1.1;
+        proxy_set_header       Connection "";
+        proxy_set_header       Host              $host;
+        proxy_set_header       X-Real-IP         $remote_addr;
+        proxy_set_header       X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header       X-Forwarded-Proto $scheme;
+
+        proxy_connect_timeout  5s;
+        proxy_read_timeout     60s;   # 后台报表可能慢
+
+        include /etc/nginx/conf.d/aura-security-headers.conf;
+        add_header X-Robots-Tag "noindex, nofollow" always;
+        add_header Referrer-Policy "no-referrer" always;
+    }
+
+    # ---- 兜底：回源给 Node（try_files 未命中时进入）-------------------------
+    location @app {
+        limit_req  zone=aura_req burst=40 nodelay;
+
+        proxy_pass             http://aura_app;
+        proxy_http_version     1.1;
+        proxy_set_header       Connection "";
+
+        proxy_set_header       Host              $host;
+        proxy_set_header       X-Real-IP         $remote_addr;
+        proxy_set_header       X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header       X-Forwarded-Proto $scheme;
+        proxy_set_header       X-Forwarded-Host  $host;
+
+        proxy_connect_timeout  5s;
+        proxy_send_timeout     30s;
+        proxy_read_timeout     30s;
+
+        proxy_buffering        on;
+        proxy_buffers          8 16k;
+        proxy_busy_buffers_size 32k;
+    }
+
+    # ---- 限流命中：429 + Retry-After ---------------------------------------
+    # error_page 429 把限流响应交给这个 location 处理。
+    # 必须定义在 server 上下文（http 层写 location 会报
+    # "location directive is not allowed here"）——这是实测踩过的坑。
+    #
+    # Retry-After 让客户端按指定秒数退避重试，而不是立即重放，
+    # 否则会出现"被限流 → 立即重试 → 继续被限流"的放大循环。
+    location @too_many_requests {
+        add_header Retry-After    1 always;
+        # 用 default_type 而非 add_header Content-Type：
+        # 后者会与 return 响应自带的 content-type 叠加成两个同名头。
+        default_type             application/json;
+        # 该 location 自带 add_header，不会继承 server 层的，
+        # 所以显式 include 安全头片段（add_header 不合并）。
+        include /etc/nginx/conf.d/aura-security-headers.conf;
+        return 429 '{"error":"请求过于频繁，请稍后重试","retryAfter":1}';
+    }
+
+    # ---- brotli + gzip 双开 -------------------------------------------------
+    # 为什么 brotli 要放在 location 外层而不是各location 里：
+    # 放http 层统一对所有响应生效，且与 gzip 形成协商优先级。
+    #
+    # 压缩率对比：brotli 比 gzip 体积小15~25%，代价是 CPU 更高。
+    # 2C2G 上不能全量开brotli —— 所以下面按 content-type 分档：
+    #   文本/JS/CSS/JSON → brotli（收益最大，且这些响应本就不大）
+    #   图片/字体→ 不压缩（已压缩格式，再压是纯浪费 CPU）
+    #
+    # ⚠️ brotli_static 未启用：它要求磁盘上预存 .br 文件，
+    # Next.js 构建不产出，所以这里只用动态压缩。
+
+    # 动态 brotli：level 4是官方推荐值（5~6 收益递减明显，CPU 显著上升）
+    brotli                on;
+    brotli_comp_level     4;
+    brotli_min_length     512;    # 小于 512 字节压缩不划算
+    # 与 gzip 相同的排除规则：已压缩的格式直接透传
+    brotli_types          text/plain
+                          text/css
+                          text/xml
+                          application/json
+                          application/javascript
+                          application/xml+rss
+                          application/rss+xml
+                          image/svg+xml
+                          font/woff
+                          font/woff2
+                          application/wasm;
+
+    # gzip 的 brotli 对照项：brotli 压缩率高但 CPU 高，
+    # 所以 gzip 仍然保留并放在 brotli 之后——
+    # 浏览器不支持 brotli 时（老客户端、部分爬虫）自动落到 gzip。
+    # 两者并存不冲突：Nginx 会优先用已启用的 brotli，
+    # 仅在客户端 Accept-Encoding 不含 br 时才用 gzip。
+    # 不要再加 Content-Encoding 手动指定——brotli 模块会自己正确设置该头，
+    # 手动 add_header 反而可能写出与实际编码不符的头，导致浏览器解不开。
+}
+
+# ---- 未匹配域名的兜底：直接拒绝 ------------------------------------------------
+# 默认 server 没有 server_name 匹配时会接管所有 Host。
+# 不 return 444 会把本站 IP 暴露给任意 Host 的请求（Host 头劫持面），
+# 444 = Nginx 内部代码，直接断连不回响应，是最省资源也最不留痕迹的拒服方式。
+server {
+    listen      80  default_server;
+    listen      [::]:80  default_server;
+    listen      443 ssl default_server;
+    listen      [::]:443 ssl default_server;
+    http2       on;
+    server_name _;
+
+    # 默认 server 也得有证书，否则 TLS 握手直接失败。
+    # 用自签的占位证书：客户端会报证书不匹配——这是**期望行为**，
+    # 因为这个 server 本来就不该被正常访问到。
+    ssl_certificate      ${NGINX_SSL_CERT};
+    ssl_certificate_key  ${NGINX_SSL_KEY};
+    ssl_protocols        TLSv1.2 TLSv1.3;
+
+    # 444：立即关闭连接，不返回任何响应体。
+    # 比 403 更彻底——403 会告诉扫描器"这里有个 Web 服务器"，444什么都不给。
+    return 444;
+}

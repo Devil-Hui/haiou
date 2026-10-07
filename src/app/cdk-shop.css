@@ -1,0 +1,40 @@
+/* 卡密商城新增的两块界面：首页分类侧栏、结果页卡密交付区块。
+   只复用 globals.css 里已有的设计变量，不引入任何新的颜色、圆角或字体，
+   因此与现有页面是同一套视觉语言。
+   注意：这是侧栏模板的唯一权威定义（勿在 globals.css 重复定义，曾因此两套规则打架）。
+   BrandIcon 的 svg 无 width/height 属性，必须在此约束尺寸，否则按默认
+   替换元素尺寸渲染（300×150），图标会巨大到撑爆侧栏。 */
+
+.plans-layout { display: flex; gap: 26px; align-items: flex-start; }
+
+.plan-sidebar { flex: 0 0 218px; position: sticky; top: 100px; }
+.plan-sidebar .side-title { margin-bottom: 12px; font-size: 11px; letter-spacing: 1px; color: var(--muted); }
+.plan-sidebar .side-list { display: flex; flex-direction: column; gap: 7px; }
+.plan-sidebar .side-item {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 10px 13px; border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--white); color: var(--ink); font-size: 13px; text-align: left;
+}
+.plan-sidebar .side-item svg { width: 18px; height: 18px; flex-shrink: 0; }
+.plan-sidebar .side-item:hover { border-color: #86a78b; }
+.plan-sidebar .side-item.active { background: var(--green-soft); border-color: var(--green); color: var(--green-dark); }
+.plan-sidebar .side-count { margin-left: auto; font-size: 11px; color: var(--muted); }
+.plan-sidebar .side-item.active .side-count { color: var(--green-dark); }
+
+.delivery-box {
+  margin-bottom: 18px; padding: 22px 24px;
+  border: 1px solid var(--line); border-radius: var(--radius); background: var(--green-soft);
+}
+.delivery-box .panel-heading { margin-bottom: 14px; }
+.delivery-box .result-details { margin-bottom: 14px; }
+
+@media (max-width: 960px) {
+  .plans-layout { flex-direction: column; gap: 18px; }
+  .plan-sidebar { flex: 1 1 auto; position: static; }
+  .plan-sidebar .side-list { flex-direction: row; flex-wrap: wrap; }
+  .plan-sidebar .side-item { width: auto; }
+}
+
+@media (max-width: 700px) {
+  .delivery-box { padding: 18px; }
+}

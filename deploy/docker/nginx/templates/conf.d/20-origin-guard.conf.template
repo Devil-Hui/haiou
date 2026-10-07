@@ -1,0 +1,117 @@
+# ============================================================================
+# 源站防护：可选的"只允许 Cloudflare 回源"
+#
+# 加载顺序 20-。由 .env 的 AURA_TRUST_CLOUDFLARE_ONLY 控制是否启用
+# （entrypoint.sh 按该变量渲染此模板）。
+#
+# 【为什么需要它】
+# 挂上 Cloudflare 橙色云朵 ≠ 源站 IP 已隐藏。服务器 IP 一旦泄露
+#（历史 DNS 记录、扫描器全网扫描、被人 ping 过），攻击者就能绕过 CF 直打源站：
+#   - WAF / Rate Limiting / Bot 防护 / 边缘缓存全部失效（那些只在 CF 边缘生效）
+#   - 2C2G 小机器直接暴露在攻击流量下
+#
+# 开启后，非 Cloudflare 段的请求在到达应用前就被 403 挡掉。
+#
+# ── 技术要点：为什么这里用 if + geo，而不是 allow/deny ──────────────
+# allow/deny 模块只认$remote_addr。而 00-cloudflare-realip.conf 的 realip
+# **已经把 $remote_addr 改写成真实访客 IP**（实测确认），
+# 于是 allow/deny 拿到的是访客 IP，永远匹配不上 Cloudflare 段 →
+# 规则静默失效，且表现为"所有人都被 403"，极难定位。
+#
+# geo 模块则可以指定用哪个变量（$realip_remote_addr，保留真实 TCP 对端），
+# 再用 if 判断 —— 这是 Nginx 官方文档给出的 geo + 变量组合的标准用法。
+#
+# ⚠️ if 是"evil"的，但这里是最少数正当用法之一：
+#   - 条件是 geo 生成的静态变量判断，不涉及 request 改写
+#   - 动作是 return，属于 if 里最安全的动作（不碰任何变量赋值）
+#  官方原文：if 是"evil"的，但用 return 做重定向/拒绝是安全的。
+#
+# ── 为什么不用 map 而用 geo ──────────────────────────────────────────
+# map 只做**精确字符串**匹配，无法匹配 CIDR 网段。Cloudflare 有 22 个网段，
+# 只能靠 geo（原生支持 CIDR）。
+# ============================================================================
+
+geo $aura_from_cloudflare {
+    default 0;
+
+    # ---- Cloudflare IPv4（官方 https://www.cloudflare.com/ips/ ，2026-10核对）----
+    173.245.48.0/20 1;
+    103.21.244.0/22  1;
+    103.22.200.0/22  1;
+    103.31.4.0/22    1;
+    141.101.64.0/18  1;
+    108.162.192.0/18 1;
+    190.93.240.0/20  1;
+    188.114.96.0/20  1;
+    197.234.240.0/22 1;
+    198.41.128.0/17  1;
+    162.158.0.0/15   1;
+    104.16.0.0/13    1;
+    104.24.0.0/14    1;
+    172.64.0.0/13    1;
+    131.0.72.0/22    1;
+
+    # ---- Cloudflare IPv6 ----
+    2400:cb00::/32   1;
+    2606:4700::/32   1;
+    2803:f800::/32   1;
+    2405:b500::/32   1;
+    2405:8100::/32   1;
+    2a06:98c0::/29   1;
+    2c0f:f248::/32   1;
+
+    # 本机/内网直连（健康检查、运维curl）放行。
+    # 删掉这两行会让容器 HEALTHCHECK 自己被 403 挡掉——这是开启本防护时
+    # 最常见的"开完就自己挂了"原因。
+    127.0.0.0/8      1;
+    10.0.0.0/8       1;
+    172.16.0.0/12    1;   # Docker 默认桥接网络（含容器间与网关）
+    192.168.0.0/16   1;
+    ::1/128          1;
+}
+
+server {
+    # 独立端口，不与 10-aura.conf 的 443 冲突。
+    # 用途：Cloudflare 回源可以指向这个端口（AURA_CF_ORIGIN_PORT），
+    #从而让 443 端口对公网**完全关闭** —— 这是隐藏源站最彻底的做法。
+    #
+    # 常规用法：保留 AURA_TRUST_CLOUDFLARE_ONLY=false（默认），
+    # 本文件不启用、443 正常服务；只有决定"关掉 443"时才把它打开。
+    listen      ${NGINX_CF_GUARD_PORT};
+    server_name ${AURA_DOMAIN};
+
+    ssl_certificate      ${NGINX_SSL_CERT};
+    ssl_certificate_key  ${NGINX_SSL_KEY};
+    ssl_protocols        TLSv1.2 TLSv1.3;
+    http2                on;
+
+    access_log           /var/log/nginx/cf-guard.access.log  main;
+    error_log            /var/log/nginx/cf-guard.error.log   warn;
+
+    # 真正的判据：$realip_remote_addr（真实 TCP 对端 = CF 边缘节点）
+    # 不是 $remote_addr（已被 realip 还原成访客 IP）
+    if ($aura_from_cloudflare = 0) {
+        # 403 会告诉扫描器"这里有个 Web 服务器"。
+        # 换成 return 444 能完全不留痕迹（立即断连不返回响应），
+        # 代价是排查时看不到任何日志线索。默认 403，优先可观测性。
+        return 403;
+    }
+
+    # 放行后与 10-aura.conf 保持一致的代理设置
+    location / {
+        limit_req  zone=aura_req burst=40 nodelay;
+        proxy_pass http://aura_app;
+
+        proxy_http_version    1.1;
+        proxy_set_header      Connection "";
+        proxy_set_header      Host              $host;
+        # 这里的 X-Real-IP 已是 realip 还原后的真实访客 IP
+        proxy_set_header      X-Real-IP         $remote_addr;
+        proxy_set_header      X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header      X-Forwarded-Proto $scheme;
+        proxy_set_header      X-Forwarded-Host  $host;
+
+        proxy_connect_timeout 5s;
+        proxy_read_timeout    30s;
+    }
+}

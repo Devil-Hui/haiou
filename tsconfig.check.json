@@ -1,0 +1,17 @@
+// 类型检查专用配置。
+//
+// 与主 tsconfig 的唯一区别是 **不纳入 `.next/types/**`**。
+// 那是 `next dev` / `next build` 生成的文件，指向的是**生成那一刻**磁盘上的路由；
+// 路由改名或删除后，陈旧产物仍指向旧路径，于是 `npx tsc --noEmit` 报
+// "Cannot find module '../../src/app/api/xxx/route.js'"——这个错误与源码无关，
+// 却会盖住真正的类型错误，也会让 CI 长期显示红灯从而失去意义。
+//
+// 用法：npx tsc --noEmit -p tsconfig.check.json
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx"
+  ]
+}

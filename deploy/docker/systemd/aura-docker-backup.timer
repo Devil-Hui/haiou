@@ -1,0 +1,23 @@
+# 每日 aura 数据库备份（Docker Compose 版）
+[Unit]
+Description=Daily aura database backup (Docker Compose)
+
+[Timer]
+# 凌晨低峰。03:30 不是随手选的：
+#   ·避开了整点（整点是各类定时任务/日志轮转的拥挤时刻）
+#   · 早于业务高峰，备份独占 IO
+#   · 留出足够时间：2C2G 上一次全量 dump 实测 < 5 分钟
+OnCalendar=*-*-* 03:30:00
+
+# 机器在 03:30 时关机/重启过，开机后补跑一次。
+# ⚠️ 这个开关是备份可靠性的关键：不用它，服务器一次异常重启就永久丢一天备份。
+Persistent=true
+
+# 随机延迟，避免所有机器同时打 IO（单机也留着，防和 logrotate 撞车）
+RandomizedDelaySec=300
+
+# 机器关机时不要唤醒，纯粹为了省电/避免意外启动
+WakeSystem=false
+
+[Install]
+WantedBy=timers.target

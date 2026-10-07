@@ -1,0 +1,40 @@
+# aura 维护任务（Docker Compose 版）
+#
+# 每 5 分钟跑一次 scripts/maintenance.mjs：订单过期清理、充值任务推进、凭证 TTL 抹除。
+# 不做这三件事，订单会永不过期、充值任务永久卡住、买家账号凭证无限期留库。
+#
+# ⚠️ 单元文件里的换行符必须是 LF。带 CR 时 systemd 报
+#    "Failed to parse ... Unknown key l" 且**静默不生效**——
+#    你会以为任务在跑，其实一次都没跑过。
+#    本文件由 deploy/docker/fix-crlf.sh --install 自动安装并做 LF 化。
+[Unit]
+Description=aura maintenance: expiry sweep, recharge advance, credential purge (Docker Compose)
+Documentation=file:///opt/aura/docs/项目交接文档.md
+# 要连数据库并访问上游，必须等网络与 docker 就绪。
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# 路径按实际部署位置调整；fix-crlf.sh --install 会替换为实际 APP_ROOT
+ExecStart=/opt/aura/deploy/docker/maintenance.sh
+WorkingDirectory=/opt/aura
+
+# 兜底：单个任务卡住不能让整条链路停摆。上游 HTTP 调用在 adapter 里有超时，
+# 这里再加一层硬上限。5 分钟间隔配 4 分钟上限，避免上一轮没跑完时叠加。
+TimeoutStartSec=240
+TimeoutStopSec=30
+
+# ---- 安全加固 -------------------------------------------------------------
+# 与 backup.service 同思路：这里刻意用 ProtectSystem=full 而不是 strict。
+# strict 下漏放行路径的表现是"任务静默不产出效果"，比不加固危险。
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectControlGroups=true
+PrivateDevices=true
+
+[Install]
+WantedBy=multi-user.target

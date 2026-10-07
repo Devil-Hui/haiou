@@ -1,0 +1,19 @@
+# 每月 aura 备份恢复演练（Docker Compose 版）
+[Unit]
+Description=Monthly aura backup restore drill (Docker Compose)
+
+[Timer]
+# 每月 1 日 04:30。选1 日是因为它跑在"新一个月第一份每日备份"之后，
+# 能验证刚产出的备份，而不是月初还没新备份时去测上个月的旧文件。
+OnCalendar=*-*-01 04:30:00
+
+# 关机错过就补跑。演练尤其需要这个：一年只跑 12 次，错一次就是 8 周空窗。
+Persistent=true
+
+# 随机延迟更长：演练比日常备份重，别和备份/日志轮转撞一起
+RandomizedDelaySec=600
+
+WakeSystem=false
+
+[Install]
+WantedBy=timers.target

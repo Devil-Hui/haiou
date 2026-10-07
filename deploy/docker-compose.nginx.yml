@@ -1,0 +1,169 @@
+# ============================================================================
+# Nginx 边缘层（Compose 覆盖文件）
+#
+# 用法（不修改原docker-compose.yml，以覆盖方式叠加）：
+#
+#   docker compose -f docker-compose.yml -f deploy/docker-compose.nginx.yml up -d
+#
+# 启动顺序：db → app → nginx（nginx 通过 depends_on 等 app healthy）。
+# 关停顺序相反：先摘流量（nginx），再停 app，最后停 db。
+# 这样滚动更新时不会出现"用户请求打到正在重启的应用"。
+#
+# ── 为什么单独一个文件而不是改主compose ──────────────────────────────
+# 主 compose 里 app 绑定的是 127.0.0.1:3000（裸机 Nginx 场景）。
+# 引入容器化 Nginx 后有两种拓扑：
+#   A. 保留主 compose 不动 + 本覆盖文件加入 nginx（当前方案）
+#      → 裸机与容器两套部署可共存；代价是启动命令要带两个 -f
+#   B. 直接改主 compose 加 nginx
+#      → 命令更短，但会打破"app 只对本机可见"的安全默认
+# 采用 A：部署形态的选择权留给运维，不强制切换。
+# ============================================================================
+name: aura
+
+services:
+  nginx:
+    build:
+      context: ./deploy/docker/nginx
+      dockerfile: Dockerfile
+      args:
+        # 国内走加速镜像；官方直连时改成 alpine:3.22
+        ALPINE_IMAGE: ${NGINX_ALPINE_IMAGE:-docker.m.daocloud.io/library/alpine:3.22}
+      # 镜像版本策略：只本地构建，不去拉取上游 nginx。
+      #
+      # 不用 pull_policy —— 它在 build 段下不被 Compose v2 早期版本接受，
+      # 会直接报 "additional properties 'pull_policy' not allowed" 导致无法启动。
+      # 行为上等价于 pull_policy: build（默认行为），且兼容性更好。
+      # 升级 nginx 时改 Dockerfile 里的 apk 版本号后重新 build 即可。
+    #
+    # ⚠️ 镜像版本策略（生产建议）：
+    #   Dockerfile 里 nginx 与 brotli 模块的版本已钉死（同一事务 apk 安装，
+    #   动态模块必须与主二进制同版本），因此**不存在**上游偷偷改版本的风险。
+    #   需要升级时改 Dockerfile 的版本号并重建镜像。
+
+    restart: unless-stopped
+
+    # ---- 端口暴露策略 ---------------------------------------------------------
+    # 只绑 127.0.0.1：公网入口应交给 Cloudflare（或宿主机防火墙）。
+    #
+    # 关键安全点：写 "80:80" 会把端口绑到 0.0.0.0，**绕过 ufw/iptables**
+    # （Docker 自己写 iptables DOCKER 链），等于把源站直接暴露到公网——
+    # 这与主compose 里"不映射 5432 到公网"是同一条原则，只是更隐蔽。
+    #
+    # 若确定要走宿主机 Nginx（不接 Cloudflare），改成 "80:80" / "443:443"，
+    # 并自行确认防火墙规则。
+    ports:
+      - "127.0.0.1:${NGINX_HTTP_PORT:-80}:80"
+      - "127.0.0.1:${NGINX_HTTPS_PORT:-443}:443"
+      # 健康检查端口：仅容器网络内可见，不映射到宿主机
+      - "127.0.0.1:${NGINX_HEALTH_PORT:-9443}:9443"
+
+    # ---- 与应用通信 -----------------------------------------------------------
+    # 与 app、db 在同一自定义网络，通过服务名解析。
+    # 不写 network_mode: host——那会让容器共享宿主网络栈，
+    # 既隔离又让容器内"127.0.0.1:3000"歧义（指宿主而非app 容器）。
+    networks:
+      - aura_net
+
+    depends_on:
+      app:
+        condition: service_started
+
+    # ---- 环境变量（模板占位符来源）---------------------------------------------
+    environment:
+      AURA_DOMAIN: ${AURA_DOMAIN:?请在 .env 中设置 AURA_DOMAIN（如aura.example.com）}
+
+      # 证书路径（容器内）。用 Cloudflare Origin CA：
+      #   docker cp origin-ca.pem aura-nginx-1:/etc/nginx/certs/aura.crt
+      #   docker cp origin-ca.key aura-nginx-1:/etc/nginx/certs/aura.key
+      NGINX_SSL_CERT: ${NGINX_SSL_CERT:-/etc/nginx/certs/aura.crt}
+      NGINX_SSL_KEY: ${NGINX_SSL_KEY:-/etc/nginx/certs/aura.key}
+      # OCSP stapling 的信任链证书。用 Origin CA 时留空（该 CA 无公共 OCSP）。
+      NGINX_SSL_TRUSTED_CERT: ${NGINX_SSL_TRUSTED_CERT:-}
+
+      NGINX_MAX_BODY_SIZE: ${NGINX_MAX_BODY_SIZE:-256k}
+      # Cloudflare 回源专用端口（20-origin-guard 用）。默认与 443 相同= 不启用额外端口
+      NGINX_CF_GUARD_PORT: ${NGINX_CF_GUARD_PORT:-8443}
+
+      TZ: ${TZ:-Asia/Shanghai}
+
+    # ---- 卷：证书 / 缓存 / 日志 -----------------------------------------------
+    volumes:
+      # 证书：只读挂载。容器永远不需要写证书目录。
+      # 换证书只需替换宿主机文件再 reload，不必重建容器。
+      - ./data/nginx/certs:/etc/nginx/certs:ro
+      # 缓存：proxy_cache 与 open_file_cache 落盘处。
+      # 不进镜像层 → 容器重建不丢缓存、镜像不膨胀。
+      - ./data/nginx/cache:/var/cache/nginx
+      # 日志：供 logrotate 与排查
+      - ./data/nginx/logs:/var/log/nginx
+
+    # ---- 资源限制（2C2G 基线，经 .env 的 NGINX_* 变量调整）-------------------
+    # 为什么给 Nginx 128 MB 上限：Nginx 常驻内存 ≈ worker 数 × 每 worker 数 MB。
+    # 2 worker ×每 worker ~15 MB（8 个 16k proxy_buffer + 连接结构）≈ 30~60 MB。
+    # 128 MB 留了 2 倍余量：突发大文件上传、缓存索引重建时会瞬时多占。
+    # 关键：**Nginx 必须是容器里内存占用最小的服务**——它一旦被 OOM 杀掉，
+    # 全站立即 502；PostgreSQL/应用被杀只是各自功能受损。
+    # 上限太小 → OOM 直接断站；上限太大 → 挤占 PG/应用内存导致全机不稳。
+    # 升配后改 .env 的 NGINX_MEM_LIMIT / NGINX_WORKER_PROCESSES 并重建即可。
+    deploy:
+      resources:
+        limits:
+          memory: ${NGINX_MEM_LIMIT:-128M}
+        reservations:
+          memory: ${NGINX_MEM_RESERVE:-32M}
+    # ---- 文件句柄 -----------------------------------------------------------
+    # worker_rlimit_nofile 必须 ≤ 这个值，否则 worker 会被内核拒绝创建 fd。
+    # Nginx 需要 =连接数 + 文件数 + 日志/缓存 fd，留足余量。
+    ulimits:
+      nofile:
+        soft: ${NGINX_NOFILE_SOFT:-16384}
+        hard: ${NGINX_NOFILE_HARD:-16384}
+
+    # ---- 健康检查 -----------------------------------------------------------
+    # 不依赖"进程在不在"，而是实际发一个 HTTP 请求：
+    # 进程活着但配置坏掉（磁盘满导致缓存写入失败、证书过期）时，
+    # 只有真实请求才能反映出来。
+    # start_period 给 10s：容器启动要渲染模板 + 加载 brotli 模块，冷启动慢。
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:9443/nginx-health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+    # ---- 优雅停机 -----------------------------------------------------------
+    # SIGQUIT 是 Nginx 的"优雅退出"信号：停止接受新连接，让已有连接处理完再退。
+    # 用默认的 SIGTERM 会直接杀掉 worker，进行中的请求被掐断（表现为 502）。
+    # 与主配置 worker_shutdown_timeout 5s 配合：reload / stop 期间不断连接。
+    stop_signal: SIGQUIT
+    stop_grace_period: 15s
+
+    # ---- 日志轮转 -----------------------------------------------------------
+    # Docker 默认 json-file **不轮转**，小磁盘机器会被日志悄悄写满（主 compose
+    # 的 db/app 已配，这里保持一致）。
+    # 与宿主机 logrotate-aura.conf 的区别：那管的是宿主机 /var/log/nginx，
+    # 这里管容器 stdout/stderr，两者不冲突。
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    # ---- 加固 ---------------------------------------------------------------
+    security_opt:
+      # 禁止提权（防止容器内被攻破后利用 setuid 提权）
+      - no-new-privileges:true
+    cap_drop:
+      # Nginx 监听 80/443 在容器内以root 启动时需要 NET_BIND_SERVICE，
+      # 但我们已在主配置里让它以降权 worker 运行。
+      # 这里 drop 掉除 NET_BIND_SERVICE 外的全部能力，最小权限。
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+
+# ---- 自定义网络 --------------------------------------------------------------
+# 不用默认 bridge：自定义网络自带 DNS 服务解析（容器名可直接当主机名），
+# 且能与 db 子网隔离。db 只在内部网络可达，不暴露到边缘层。
+networks:
+  aura_net:
+    driver: bridge

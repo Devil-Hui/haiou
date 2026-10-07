@@ -1,0 +1,39 @@
+# aura 应用日志清理（Docker Compose 版）
+#
+# 每天按类别保留期删除过期日志：app 14 / error 30 / audit 365 / payment 180 天。
+# 不做这件事，持久化后的日志会一直增长直到写满盘——而盘满会连累同盘的 PostgreSQL。
+#
+# ⚠️ 单元文件里的换行符必须是 LF。带 CR 时 systemd 报
+#    "Failed to parse ... Unknown key l" 且**静默不生效**——
+#    你会以为清理在跑，其实一次都没跑过。
+#    本文件由 deploy/docker/fix-crlf.sh --install 自动安装并做 LF 化。
+[Unit]
+Description=aura application log pruning (Docker Compose)
+Documentation=file:///opt/aura/deploy/README.md
+# 只碰本地文件，不需要网络。放在备份之后，避免和备份抢 IO。
+After=docker.service
+
+[Service]
+Type=oneshot
+# 路径按实际部署位置调整；fix-crlf.sh --install 会替换为实际 APP_ROOT
+ExecStart=/opt/aura/deploy/docker/log-prune.sh
+WorkingDirectory=/opt/aura
+
+# 日志目录可能很大，find 遍历需要一点时间；给足上限但不要无限等。
+TimeoutStartSec=300
+
+# ---- 安全加固 -------------------------------------------------------------
+# 本任务要**删除**文件，权限面刻意收窄：
+#   ProtectSystem=full —— /usr /boot /etc 只读，防止路径写错时误删系统文件；
+#   ReadWritePaths 只放开日志目录 —— 即便脚本有 bug，也只可能影响这一个目录。
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectControlGroups=true
+PrivateDevices=true
+ReadWritePaths=/opt/aura/data/logs
+
+[Install]
+WantedBy=multi-user.target

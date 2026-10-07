@@ -1,0 +1,32 @@
+# 构建上下文里不该出现的东西。排除掉它们既能缩小上下文，也能避免把密钥和
+# 本地构建产物打进镜像。路径全部相对仓库根目录。
+.git
+.codebuddy
+node_modules
+.next
+data
+
+# 部署与文档不属于运行时
+deploy
+docs
+README.md
+
+# 本地产生的临时文件
+*.tsbuildinfo
+next-env.d.ts
+
+# 本地运行日志：既不属于运行时，也不该进镜像
+# 注意 `*.log` 只匹配根目录下的 .log，**不**匹配子目录里的（日志在 logs/、data/logs/）。
+# 这里两条都写：根目录兜底 + logs 目录整块排除（logs 本就是本地卷挂载的运行时产物）。
+*.log
+logs
+data/logs
+
+# 构建描述自身
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# 密钥绝不进镜像。真实值由 compose 在运行期注入。
+.env
+.env.*

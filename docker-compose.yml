@@ -1,0 +1,147 @@
+# 单机一体化部署：应用与 PostgreSQL 同机，全部路径相对本文件所在目录（仓库根目录）。
+#
+# 两条刻意的选择：
+# 1. 数据库不映射宿主机端口，只在 compose 内部网络可达。Docker 发布的端口会绕过
+#    ufw/iptables，把 5432 映射到公网等于把数据库直接暴露出去。
+# 2. 应用只绑定 127.0.0.1，公网入口交给外层 Nginx（用 deploy/docker-compose.nginx.yml 叠加）。
+name: aura
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-aura}
+      POSTGRES_USER: ${POSTGRES_USER:-aura}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?请在项目根目录的 .env 中设置 POSTGRES_PASSWORD}
+    volumes:
+      # 相对路径：数据落在仓库根的 ./data/postgres，随项目一起搬走
+      - ./data/postgres:/var/lib/postgresql/data
+    # ---- PostgreSQL 内存与 OOM 保护（2C2G 关键）--------------------------------
+    # 为什么数据库必须有上限：内核 OOM killer 会挑**占用内存最多的进程**杀掉。
+    # 不设限制时 PostgreSQL 很可能就是那个"最胖的"，于是被内核杀掉 ——
+    # 表现为容器无故重启、数据正在写入的事务丢失，且日志里看不到任何 OOM 提示
+    # （只记一行 "Killed process"）。
+    #
+    # 512M 的依据：2G 机器的分配账
+    #   系统 + Docker daemon        ~400 MB
+    #   PostgreSQL                 ~512 MB（本限制）
+    #   Next.js 应用               ~768 MB（compose 已限）
+    #   Nginx                ~128 MB
+    #   ------------------------------------------
+    #   合计                ~1808 MB，留约 200 MB 给页缓存与突发
+    #
+    # 上限太小 → 数据库被自己限死、连接被拒；太大 → OOM 时数据库第一个被杀。
+    # 512M 配合下面的 shared_buffers=128MB，常驻约 250~300MB，留足余量。
+    deploy:
+      resources:
+        limits:
+          memory: ${DB_MEM_LIMIT:-512M}
+        reservations:
+          memory: ${DB_MEM_RESERVE:-256M}
+    # shared_buffers 是 PG 真正分配的共享内存，官方建议为容器内存的 25% 左右。
+    # 默认值（128MB）偏大，会让 PG 在 512M 限制下更容易触顶。
+    # max_connections 从默认 100 压到 30：2C2G 上应用连接池只有 5~20 条，
+    # 留 100 个连接位只是白占内存（约每条 2~5MB）。
+    command:
+      - postgres
+      - -c
+      - shared_buffers=128MB
+      - -c
+      - effective_cache_size=384MB
+      - -c
+      - work_mem=4MB
+      - -c
+      - maintenance_work_mem=64MB
+      - -c
+      - max_connections=30
+      # WAL 相关：让崩溃恢复更快、减少检查点时的 IO 尖峰。
+      # min_wal_size 默认 80MB，在小磁盘机器上偏大，压到 64MB。
+      - -c
+      - min_wal_size=64MB
+      - -c
+      - max_wal_size=1GB
+      # 慢查询日志：写进容器日志，便于排查"接口转圈"类问题。
+      # log_min_duration_statement=500 表示超过 500ms 的查询会记录。
+      - -c
+      - log_min_duration_statement=500
+    # 优雅停机：docker stop 时先给PG 30 秒完成正在提交的事务。
+    # 不设的话 SIGTERM 直接打断，容器被强杀时可能留下需要 WAL 恢复的痕迹
+    #（数据不丢，但重启会慢，且期间不可用）。
+    stop_signal: SIGINT
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-aura} -d ${POSTGRES_DB:-aura}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      # 数据目录初始化（首次创建库）可能超过 30 秒，
+      # start_period 期间失败不计入 retries，避免"刚起就判死"。
+      start_period: 60s
+    # 容器日志默认不轮转，小磁盘机器上会被悄悄写满
+    logging: &logging
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  app:
+    build:
+      context: .
+    restart: unless-stopped
+    # 没有 .env 也能起来（变量可直接来自 shell 或 CI），所以设为非必需。
+    # 真实部署请 cp .env.example .env 后填值；.env 已被 .gitignore 排除。
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-aura}:${POSTGRES_PASSWORD:?请在 .env 中设置 POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-aura}
+      ADMIN_SETUP_TOKEN: ${ADMIN_SETUP_TOKEN:?生产环境必须设置 ADMIN_SETUP_TOKEN，否则初始化会被拒绝}
+      # 前面只有一层反向代理，取 X-Forwarded-For 的最后一跳。
+      #
+      # ⚠️ 接入 Cloudflare 后**必须改成 0**：CF 会在 XFF 末尾追加它自己的边缘节点 IP，
+      # hops>=1 时应用取到的就是那个节点 IP → 全站访客共用一个限流桶
+      #（一个访客触发限流，所有人一起被限流）。
+      # 设 0 后应用只读 X-Real-IP，而 Nginx 已把该头写成 CF 校验过的真实客户端 IP
+      # （deploy/docker/nginx/templates/conf.d/00-cloudflare-realip.conf）。
+      # 直连裸机 Nginx（不经 CF）时才用1。
+      TRUSTED_PROXY_HOPS: ${TRUSTED_PROXY_HOPS:-0}
+      # 2 GB 机器上每条连接都占数据库内存，连接池收窄到 5
+      DB_POOL_MAX: ${DB_POOL_MAX:-5}
+      # V8 堆上限：让 V8 在触顶前主动 GC 并回收，而不是一路涨到容器上限
+      # 被内核 OOM killer 杀掉（那样无预警，且可能连带拖慢数据库）。
+      # 512MB 是 768M 容器上限的 2/3，留给非堆（JIT 代码、线程栈、Buffer）。
+      NODE_OPTIONS: ${NODE_OPTIONS:---max-old-space-size=512}
+      # 日志目录：指向容器内的 /app/logs，并由下面 volumes 挂到宿主 ./data/logs 持久化。
+      #
+      # 为什么不留在容器里：容器一重建 logs/ 就没了，而 audit（资金/权限变更）要留 365 天、
+      # payment（支付回调原文）要留 180 天作为举证材料——这两类丢了无法补。
+      # 不挂卷等于把举证材料放在一个随时会被重建抹掉的目录里。
+      AURA_LOG_DIR: /app/logs
+    volumes:
+      # ⚠️ 宿主目录的属主必须是容器内 node 用户的 uid（alpine node 镜像为 1000），
+      # 否则容器写不进日志——而日志模块是"吞错降级"的，写失败不报错，
+      # 表现为日志静默消失（比直接报错危险得多）。
+      # 首次启动前先执行： mkdir -p data/logs && chown 1000:1000 data/logs
+      - ./data/logs:/app/logs
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:3000:3000"
+    # 与 systemd 单元的 MemoryMax 同思路：内存超限时杀掉的是应用，而不是数据库
+    deploy:
+      resources:
+        limits:
+          memory: ${APP_MEM_LIMIT:-768M}
+        reservations:
+          memory: ${APP_MEM_RESERVE:-384M}
+    # ---- 优雅停机：这是"临时宕机不丢数据"的关键一环 ----------------------
+    # docker stop 发 SIGTERM 后，Node 收到信号会**立刻终止**正在处理的请求，
+    # 表现为用户侧"下单到一半失败"。更糟的是若正在写库，可能留下半截事务。
+    #
+    # 排空等待时间：Next.js 需要时间结束进行中的 SSR 与 API 处理。
+    # 30 秒足够处理完当前请求，且远小于用户可接受的等待上限。
+    stop_signal: SIGTERM
+    stop_grace_period: 30s
+    logging: *logging

@@ -1,0 +1,46 @@
+# aura 备份恢复演练（Docker Compose 版）
+#
+# 为什么每月必须真的还原一次：
+#   "备份文件存在、大小正常"与"能还原出可用的数据"完全是两件事。
+#   磁盘静默损坏、pg_dump 中途失败、PostgreSQL 大版本升级后格式不兼容、
+#   权限变更 —— 都会让备份悄悄变成废文件，而真到需要那天才发现就来不及了。
+#
+#   **没跑过还原的备份不算备份。**
+#
+# 演练会创建临时库 aura_restore_check、还原、逐表数行数、然后删掉临时库。
+# 不影响生产库。退出码非 0 = 备份不可用，必须立即处理。
+[Unit]
+Description=aura backup restore drill (Docker Compose)
+Documentation=file:///opt/aura/docs/应急恢复手册.md
+After=docker.service aura-docker-backup.service
+# 不 Wants/Requires 备份服务：演练要能手工单独触发。
+# 若强行 DependsOn，备份失败会把演练也一起跳过，最需要它的时候反而跑不了。
+
+[Service]
+Type=oneshot
+ExecStart=/opt/aura/deploy/docker/restore-check.sh
+WorkingDirectory=/opt/aura
+
+# 还原会写一份完整副本数据，2C2G 上有吃满内存的可能。
+# 压低优先级，避免和在线业务抢资源。
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=6
+
+Environment=BACKUP_DIR=/opt/aura/data/backups/db
+Environment=DB_NAME=aura
+
+# ---- 安全加固 -------------------------------------------------------------
+# 演练只读备份目录、只写临时库，不该碰其他路径。
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectControlGroups=true
+PrivateDevices=true
+# 只读访问备份目录足够（脚本内不需要写）
+ReadOnlyPaths=/opt/aura/data/backups
+
+[Install]
+WantedBy=multi-user.target

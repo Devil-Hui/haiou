@@ -1,0 +1,55 @@
+# ============================================================================
+# 安全响应头片段（被各 location 通过 include 引用）
+#
+# ── 为什么必须用 include 而不能靠 server 层继承 ───────────────────────────
+# Nginx 的 add_header 是"**就近覆盖**"而非"合并"：
+# 只要 location 里出现任意一条 add_header，server 层继承下来的**全部** add_header
+# 都会失效（不是只覆盖同名那一条）。
+#
+# 这带来一个很容易漏的坑：本项目有 5 个 location 带自己的 add_header
+#（静态资源 /api/ /orders/ /admin /健康检查），
+# 若把安全头只写在 server 层，这 5 处响应会**一个安全头都没有**——
+# 而它们恰恰是最需要保护的（/admin/ 和 /orders/ 含敏感信息）。
+#
+# 所以这里把安全头做成独立片段，每个需要它的 location 显式 include。
+# 代价是重复几行 include，换来"行为确定、不依赖隐式继承"。
+#
+# 另一个关键点：这些头**只在有 add_header 的上下文里生效**，
+# 因此 include 的位置与该location 自己的 add_header 并列，互不影响。
+# ============================================================================
+
+# ---- HSTS ---------------------------------------------------------------
+# max-age=31536000（1 年）。
+# 刻意**不开** includeSubDomains / preload：
+# 它们要求域名下**所有**子域名都已是 https 且都已就位，
+# 任何一个没配好就会让整个域下的服务不可用，且浏览器会记住很久、难以挽回。
+# 当前只有这一个域名，开subDomains 本身安全，但将来加子站时极容易忘。
+add_header Strict-Transport-Security "max-age=31536000" always;
+
+# ---- 传输与嗅探 ---------------------------------------------------------
+# 禁止 MIME 嗅探：防止浏览器把上传的文本当脚本执行
+add_header X-Content-Type-Options "nosniff" always;
+
+# 点击劫持防护。现代浏览器优先看 CSP 的 frame-ancestors，
+# 但 XFO 仍被广泛支持，且老浏览器只认它——两者都发。
+add_header X-Frame-Options "DENY" always;
+
+# CSP 的 frame-ancestors 是X-Frame-Options 的现代等价物，
+# 且能覆盖 frame-ancestors 'none' 之外的精细场景。
+# 这里用 'none' 与 XFO DENY 等价。
+# ⚠️ 本项目**不使用**内联脚本外的 eval / 外部资源，若将来接入第三方脚本
+# （统计、客服、A/B 测试）需要放宽 script-src，那时必须同步调整这里。
+add_header Content-Security-Policy "frame-ancestors 'none'; base-uri 'self'; object-src 'none'" always;
+
+# ---- 权限收敛 -----------------------------------------------------------
+# 本站一个都用不到摄像头/麦克风/定位/支付/USB，收紧后被注入的脚本无法静默调用。
+add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()" always;
+
+# ---- Referrer -----------------------------------------------------------
+# 只传同源，跨站跳转不泄漏完整 URL 与参数。
+# 不能设 no-referrer：支付宝/易支付回调链路会依赖部分来源信息。
+add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+# ---- 跨源资源 -----------------------------------------------------------
+# 只有本站资源可被嵌入/跨源读取，防止第三方站点盗链本站内容。
+add_header Cross-Origin-Resource-Policy "same-origin" always;

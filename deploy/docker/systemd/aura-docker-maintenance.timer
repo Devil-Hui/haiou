@@ -1,0 +1,24 @@
+# 每 5 分钟执行一次 aura 维护任务（Docker Compose 版）
+[Unit]
+Description=Run aura maintenance every 5 minutes (Docker Compose)
+
+[Timer]
+# 为什么是 5 分钟：
+#   · 订单过期：30 分钟支付时限，过期扫描晚几分钟不影响正确性，只是列表脏一点；
+#   · 充值任务推进：卡住的任务每 5 分钟被推一次，买家进度页轮询是 5~10 秒，
+#     所以「卡住」最长 5 分钟就会被自动救回，买家几乎无感；
+#   · 凭证 TTL：越早抹除越好，但也没必要按分钟跑（凭证 TTL 是 30 分钟级）。
+# 再密就是对 2C2G 白耗 CPU，再疏则买家可见地卡住。
+OnBootSec=2min
+OnUnitActiveSec=5min
+Unit=aura-docker-maintenance.service
+
+# 不用 Persistent=true：这是"推进型"任务而非"补跑型"。
+# 停机期间订单本来就该超时、任务本来就该卡住，开机后下一次 5 分钟自然会处理；
+# 补跑反而会在开机瞬间积压出一堆并发。
+#
+# 随机延迟：避免与备份（03:30）、恢复演练撞在同一秒抢 IO。
+RandomizedDelaySec=20
+
+[Install]
+WantedBy=timers.target
